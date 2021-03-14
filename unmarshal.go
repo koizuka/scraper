@@ -143,13 +143,10 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 				fieldValue := value.Field(i)
 
 				selector := fieldType.Tag.Get(FindTag)
-				if selector == "" {
-					return UnmarshalFieldError{
-						fieldType.Name,
-						fmt.Errorf("tag %v is required", FindTag),
-					}
+				selected := sel
+				if selector != "" {
+					selected = sel.Find(selector)
 				}
-				sel := sel.Find(selector)
 
 				opt := UnmarshalOption{
 					Attr: fieldType.Tag.Get(AttrTag),
@@ -158,7 +155,7 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 					Loc:  opt.Loc,
 				}
 
-				err := unmarshalValue(fieldValue, sel, opt)
+				err := unmarshalValue(fieldValue, selected, opt)
 				if err != nil {
 					return UnmarshalFieldError{
 						fieldType.Name,

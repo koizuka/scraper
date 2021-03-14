@@ -259,3 +259,47 @@ func TestUnmarshallOptional(t *testing.T) {
 		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
 	}
 }
+
+type EmptyFind struct {
+	Href string `attr:"href"`
+	Text string
+}
+
+func TestUnmarshallEmptyFind(t *testing.T) {
+	html := `<a href="URL">text</a>`
+
+	page, err := createMashallerTestPage(html)
+	if err != nil {
+		t.Error(err)
+	}
+
+	sel := page.Find("a")
+
+	{
+		var value string
+		err = Unmarshal(&value, sel, UnmarshalOption{Attr: "href"})
+		if err != nil {
+			t.Error(err)
+		}
+		shouldBe := "URL"
+		if value != shouldBe {
+			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		}
+	}
+
+	{
+		var value EmptyFind
+		err = Unmarshal(&value, sel, UnmarshalOption{})
+		if err != nil {
+			t.Error(err)
+		}
+
+		shouldBe := EmptyFind{
+			Href: "URL",
+			Text: "text",
+		}
+		if value != shouldBe {
+			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		}
+	}
+}

@@ -27,7 +27,15 @@ type UnmarshalFieldError struct {
 }
 
 func (err UnmarshalFieldError) Error() string {
-	return fmt.Sprintf("%v: %v", err.Field, err.Err)
+	e := err.Err
+	fields := []string{err.Field}
+	next, ok := e.(UnmarshalFieldError)
+	for ok {
+		fields = append(fields, next.Field)
+		e = next.Err
+		next, ok = e.(UnmarshalFieldError)
+	}
+	return fmt.Sprintf("%v: %v", strings.Join(fields, "."), e)
 }
 
 func stripchars(str, chr string) string {

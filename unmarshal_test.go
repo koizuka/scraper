@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -301,5 +302,21 @@ func TestUnmarshallEmptyFind(t *testing.T) {
 		if value != shouldBe {
 			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
 		}
+	}
+}
+
+func TestUnmarshalFieldError_Error(t *testing.T) {
+	target := UnmarshalFieldError{
+		"a",
+		UnmarshalFieldError{
+			"b",
+			errors.New("test"),
+		},
+	}
+
+	shouldBe := "a.b: test"
+	value := target.Error()
+	if value != shouldBe {
+		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
 	}
 }

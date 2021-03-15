@@ -320,3 +320,32 @@ func TestUnmarshalFieldError_Error(t *testing.T) {
 		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
 	}
 }
+
+type UnmarshalTestData2Item struct {
+	Text string
+}
+type UnmarshalTestData2 struct {
+	P []UnmarshalTestData2Item `find:"p"`
+}
+
+func TestUnmarshallStructArrayInStruct(t *testing.T) {
+	html := `<div> <p>1</p> <p>2</p> <p>3</p> <p>4</p> </div>`
+
+	page, err := createMashallerTestPage(html)
+	if err != nil {
+		t.Error(err)
+	}
+
+	{
+		var value UnmarshalTestData2
+		shouldBe := []UnmarshalTestData2Item{{"1"}, {"2"}, {"3"}, {"4"}}
+		err = Unmarshal(&value, page.Find("div"), UnmarshalOption{})
+		if err != nil {
+			t.Error(err)
+		}
+
+		if !reflect.DeepEqual(value.P, shouldBe) {
+			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		}
+	}
+}

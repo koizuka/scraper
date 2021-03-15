@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -18,7 +19,7 @@ type Unmarshaller interface {
 type UnmarshalTypeError struct{}
 
 func (err UnmarshalTypeError) Error() string {
-	return "Unmarshal: v must be a pointer to the value"
+	return "must be a pointer to the value"
 }
 
 type UnmarshalFieldError struct {
@@ -62,7 +63,7 @@ type UnmarshalOption struct {
 
 func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOption) error {
 	if !value.CanSet() {
-		return UnmarshalTypeError{}
+		return errors.New("value must CanSet")
 	}
 
 	if value.Kind() == reflect.Slice {

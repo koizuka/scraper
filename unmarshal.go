@@ -16,10 +16,16 @@ type Unmarshaller interface {
 	Unmarshal(s string) error
 }
 
-type UnmarshalTypeError struct{}
+type UnmarshalMustBePointerError struct{}
 
-func (err UnmarshalTypeError) Error() string {
+func (err UnmarshalMustBePointerError) Error() string {
 	return "must be a pointer to the value"
+}
+
+type UnmarshalUnexportedFieldError struct{}
+
+func (err UnmarshalUnexportedFieldError) Error() string {
+	return "field must be exported"
 }
 
 type UnmarshalFieldError struct {
@@ -129,7 +135,7 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 
 	default:
 		if opt.Time != "" {
-			return fmt.Errorf("time tag must be empty unless time.Time")
+			return fmt.Errorf("`time` tag must be empty unless time.Time")
 		}
 		if !value.CanAddr() {
 			return fmt.Errorf("failed CanAddr: %v, %v", value, value.Type())
@@ -141,6 +147,13 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		}
 
 		if value.Kind() == reflect.Struct {
+			if opt.Re != "" {
+				return fmt.Errorf("`re` tag must be empty for struct")
+			}
+			if opt.Attr != "" {
+				return fmt.Errorf("`attr` tag must be empty for struct")
+			}
+
 			const FindTag = "find"
 			const AttrTag = "attr"
 			const TimeTag = "time"
@@ -162,6 +175,13 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 					Time: fieldType.Tag.Get(TimeTag),
 					Re:   fieldType.Tag.Get(ReTag),
 					Loc:  opt.Loc,
+				}
+
+				if fieldType.PkgPath != "" {
+					return UnmarshalFieldError{
+						fieldType.Name,
+						UnmarshalUnexportedFieldError{},
+					}
 				}
 
 				err := unmarshalValue(fieldValue, selected, opt)
@@ -212,7 +232,7 @@ func Unmarshal(v interface{}, selection *goquery.Selection, opt UnmarshalOption)
 
 	ht := reflect.TypeOf(v)
 	if ht.Kind() != reflect.Ptr {
-		return UnmarshalTypeError{}
+		return UnmarshalMustBePointerError{}
 	}
 
 	return unmarshalValue(reflect.ValueOf(v).Elem(), selection, opt)

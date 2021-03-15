@@ -349,3 +349,26 @@ func TestUnmarshallStructArrayInStruct(t *testing.T) {
 		}
 	}
 }
+
+type UnmarshalTestUnexportedField struct {
+	test string
+}
+
+func TestUnmarshallUnexportedField(t *testing.T) {
+	html := `<div></div>`
+
+	page, err := createMashallerTestPage(html)
+	if err != nil {
+		t.Error(err)
+	}
+
+	{
+		var value UnmarshalTestUnexportedField
+		value.test = ""
+		shouldBe := UnmarshalFieldError{"test", UnmarshalUnexportedFieldError{}}
+		err = Unmarshal(&value, page.Find("div"), UnmarshalOption{})
+		if err != shouldBe {
+			t.Errorf(fmt.Sprintf("'%v' != '%v'", err, shouldBe))
+		}
+	}
+}

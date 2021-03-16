@@ -23,17 +23,17 @@ const (
 )
 
 type Session struct {
-	Name               string
+	Name               string // directory name to store session files(downloaded files and cookies)
 	client             http.Client
-	Encoding           encoding.Encoding
-	UserAgent          string
-	FilePrefix         string
+	Encoding           encoding.Encoding // force charset over Content-Type response header
+	UserAgent          string            // specify User-Agent
+	FilePrefix         string            // prefix to directory of settion files
 	invokeCount        int
-	NotUseNetwork      bool
-	SaveToFile         bool
-	ShowRequestHeader  bool
-	ShowResponseHeader bool
-	ShowFormPosting    bool
+	NotUseNetwork      bool // load from previously downloaded session files rather than network access
+	SaveToFile         bool // save downloaded pages to session directory
+	ShowRequestHeader  bool // print request headers with Logger
+	ShowResponseHeader bool // print response headers with Logger
+	ShowFormPosting    bool // print posting form data, with Logger
 	Log                Logger
 	jar                *cookiejar.Jar
 }
@@ -77,6 +77,7 @@ func (session *Session) LoadCookie() error {
 	return err
 }
 
+// must call LoadCookie() before call SaveCookie().
 func (session *Session) SaveCookie() error {
 	return session.jar.Save()
 }
@@ -334,17 +335,13 @@ func (session *Session) Frame(page *Page, frameSelector string) (*Page, error) {
 }
 
 type FollowAnchorTextOption struct {
-	CheckAlt  bool
-	TrimSpace bool
-	NumLink   int // 0だと個数が1以上なら先頭を返す
-	Index     int
+	CheckAlt  bool // if true, searches text into img.alt attribute
+	NumLink   int  // if >0, must be equal to number of matched texts
+	Index     int  // 0=use the first match
+	TrimSpace bool // TrimSpace both before compare texts
 }
 
-func MakeFollowAnchorTextOpt2(checkAlt bool, num_link, index int) FollowAnchorTextOption {
-	return FollowAnchorTextOption{checkAlt, false, num_link, index}
-}
-
-func (session *Session) FollowAnchorTextOpt3(page *Page, text string, opt FollowAnchorTextOption) (*Response, error) {
+func (session *Session) FollowAnchorTextOpt(page *Page, text string, opt FollowAnchorTextOption) (*Response, error) {
 	session.Printf("FollowAnchorText: searching %#v\n", text)
 	if opt.TrimSpace {
 		text = strings.TrimSpace(text)
@@ -374,18 +371,8 @@ func (session *Session) FollowAnchorTextOpt3(page *Page, text string, opt Follow
 	return session.FollowSelectionLink(page, selection.Eq(opt.Index), "href")
 }
 
-func (session *Session) FollowAnchorTextOpt2(page *Page, text string, checkAlt bool, num_link, index int) (*Response, error) {
-	return session.FollowAnchorTextOpt3(page, text, MakeFollowAnchorTextOpt2(checkAlt, num_link, index))
-}
-
-func (session *Session) FollowAnchorTextOpt(page *Page, text string, checkAlt bool) (*Response, error) {
-	return session.FollowAnchorTextOpt2(page, text, checkAlt, 1, 0)
-}
-
-func (session *Session) FollowAnchorTextOptFirst(page *Page, text string, checkAlt bool) (*Response, error) {
-	return session.FollowAnchorTextOpt2(page, text, checkAlt, 0, 0)
-}
-
 func (session *Session) FollowAnchorText(page *Page, text string) (*Response, error) {
-	return session.FollowAnchorTextOpt(page, text, true)
+	return session.FollowAnchorTextOpt(page, text,
+		FollowAnchorTextOption{CheckAlt: true, NumLink: 1},
+	)
 }

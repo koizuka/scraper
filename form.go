@@ -11,19 +11,21 @@ import (
 	"strings"
 )
 
-type FormElementNotFound struct {
+type FormElementNotFoundError struct {
 	Name string
 }
 
-func (error FormElementNotFound) Error() string {
+func (error FormElementNotFoundError) Error() string {
 	return fmt.Sprintf("form element %v not found", error.Name)
 }
 
+// AvailableValue holds an available value and corresponding label to display.
 type AvailableValue struct {
 	Value string
 	Label string
 }
 
+// FormElement holds a form element.
 type FormElement struct {
 	Type            string // "select", "hidden", "submit", "text", "email", "password", "button", "checkbox", "radio", "image"
 	Name            string
@@ -55,6 +57,7 @@ func (element *FormElement) GoString() string {
 	return buf.String()
 }
 
+// Form holds form data and submit information
 type Form struct {
 	url      *url.URL
 	baseUrl  *url.URL
@@ -64,6 +67,7 @@ type Form struct {
 	Logger   Logger
 }
 
+// Form generates a Form object from a form object identified by selector in the Page
 func (page *Page) Form(selector string) (*Form, error) {
 	form := page.Find(selector)
 	numForm := form.Length()
@@ -187,12 +191,12 @@ func (page *Page) Form(selector string) (*Form, error) {
 	}, nil
 }
 
-// Set a value to an element.
-// if element have AvailableValues(eg. check, radio or select elements), value must be equals one of it.
+// Set sets a value to the element specified by name.
+// if element have AvailableValues(eg. check, radio or select elements), value must be equals one of them.
 func (form *Form) Set(name string, value string) error {
 	element, ok := form.Elements[name]
 	if !ok {
-		return FormElementNotFound{name}
+		return FormElementNotFoundError{name}
 	}
 	if element.AvailableValues == nil {
 		element.Value = &AvailableValue{Value: value}
@@ -228,7 +232,7 @@ func (form *Form) SetForce(name string, value string) error {
 func (form *Form) ValueByLabel(name string, label string) (string, error) {
 	element, ok := form.Elements[name]
 	if !ok {
-		return "", FormElementNotFound{name}
+		return "", FormElementNotFoundError{name}
 	}
 	if element.AvailableValues == nil {
 		return "", fmt.Errorf("form element %v is not a selection", name)
@@ -253,10 +257,11 @@ func (form *Form) SetByLabel(name string, label string) error {
 	return form.Set(name, value)
 }
 
+// PrintSelection shows available values of the element specified by name.
 func (form *Form) PrintSelection(name string) error {
 	element, ok := form.Elements[name]
 	if !ok {
-		return FormElementNotFound{name}
+		return FormElementNotFoundError{name}
 	}
 
 	form.Logger.Printf("%v ->\n", name)
@@ -280,36 +285,39 @@ func (form *Form) PrintSelection(name string) error {
 	return nil
 }
 
-// Unset or uncheck an element
+// Unset unset or uncheck the element specified by name.
 func (form *Form) Unset(name string) error {
 	element, ok := form.Elements[name]
 	if !ok {
-		return FormElementNotFound{name}
+		return FormElementNotFoundError{name}
 	}
 	element.Value = nil
 	return nil
 }
 
-// check the checkbox
+// Check checks the checkbox specified by name.
 func (form *Form) Check(name string) error {
 	return form.Select(name, 0)
 }
+// Uncheck unchecks the checkbox specified by name.
 func (form *Form) Uncheck(name string) error {
 	return form.Unset(name)
 }
 
+// NumSelect returns number of available values of the select element specified by name.
 func (form *Form) NumSelect(name string) (int, error) {
 	element, ok := form.Elements[name]
 	if !ok {
-		return 0, FormElementNotFound{name}
+		return 0, FormElementNotFoundError{name}
 	}
 	return len(element.AvailableValues), nil
 }
 
+// Select sets an answer to the select element specified by name.
 func (form *Form) Select(name string, index int) error {
 	element, ok := form.Elements[name]
 	if !ok {
-		return FormElementNotFound{name}
+		return FormElementNotFoundError{name}
 	}
 	if index < 0 || index >= len(element.AvailableValues) {
 		return fmt.Errorf("select out of range %v in %#v", index, element.AvailableValues)
@@ -318,10 +326,13 @@ func (form *Form) Select(name string, index int) error {
 	return nil
 }
 
+// SubmitOpt submits a form.
 func (session *Session) Submit(form *Form) (*Response, error) {
 	return session.SubmitOpt(form, "")
 }
 
+// SubmitOpt submits a form.
+// if imageId is non-empty, specifies "image" element to imitate clicking.
 func (session *Session) SubmitOpt(form *Form, imageId string) (*Response, error) {
 	m := map[string]string{}
 	for name, element := range form.Elements {

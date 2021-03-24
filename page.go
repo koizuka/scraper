@@ -6,12 +6,15 @@ import (
 	"regexp"
 )
 
+// Page holds DOM structure of the page and its URL, Logging information.
 type Page struct {
 	*goquery.Document
 	BaseUrl *url.URL
 	Logger  Logger
 }
 
+// MetaRefresh returns a URL from "meta http-equiv=refresh" tag if it exists.
+// otherwise returns nil.
 func (page *Page) MetaRefresh() *url.URL {
 	refresh := page.Find("meta[http-equiv=refresh]")
 	if refresh.Length() > 0 {
@@ -27,6 +30,7 @@ func (page *Page) MetaRefresh() *url.URL {
 	return nil
 }
 
+// ResolveLink resolve relative URL form the page and returns a full URL.
 func (page *Page) ResolveLink(relativeURL string) (string, error) {
 	reqUrl, err := page.BaseUrl.Parse(relativeURL)
 	if err != nil {

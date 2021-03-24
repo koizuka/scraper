@@ -22,6 +22,7 @@ const (
 	UserAgent_default   = UserAgent_firefox86
 )
 
+// Session holds communication and logging options
 type Session struct {
 	Name               string // directory name to store session files(downloaded files and cookies)
 	client             http.Client
@@ -77,11 +78,13 @@ func (session *Session) LoadCookie() error {
 	return err
 }
 
+// SaveCookie stores cookies to a file.
 // must call LoadCookie() before call SaveCookie().
 func (session *Session) SaveCookie() error {
 	return session.jar.Save()
 }
 
+// charsetEncoding parses chatset string and returns encoding.Encoding.
 func charsetEncoding(charset string) encoding.Encoding {
 	var encoding encoding.Encoding
 	switch strings.ToLower(charset) {
@@ -95,7 +98,7 @@ func charsetEncoding(charset string) encoding.Encoding {
 	return encoding
 }
 
-// convert body(given encoding) to UTF-8.
+// convetEncodingToUtf8 converts body(given encoding) to UTF-8.
 func convertEncodingToUtf8(body []byte, encoding encoding.Encoding) ([]byte, error) {
 	if encoding == nil {
 		return body, nil
@@ -233,6 +236,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 	}, nil
 }
 
+// Get invokes HTTP GET request.
 func (session *Session) Get(getUrl string) (*Response, error) {
 	req, err := http.NewRequest("GET", getUrl, nil)
 	if err != nil {
@@ -241,6 +245,7 @@ func (session *Session) Get(getUrl string) (*Response, error) {
 	return session.invoke(req)
 }
 
+// GetPageMaxredirect gets the URL and follows HTTP meta refresh if response page contained that.
 func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Page, error) {
 	resp, err := session.Get(getUrl)
 	if err != nil {
@@ -259,6 +264,7 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 	return page, nil
 }
 
+// ApplyRefresh mimics HTML Meta Refresh.
 func (session *Session) ApplyRefresh(page *Page, maxRedirect int) (*Page, error) {
 	if maxRedirect > 0 {
 		if url := page.MetaRefresh(); url != nil {
@@ -269,11 +275,12 @@ func (session *Session) ApplyRefresh(page *Page, maxRedirect int) (*Page, error)
 	return page, nil
 }
 
+// GetPage gets the URL and returns a Page.
 func (session *Session) GetPage(getUrl string) (*Page, error) {
 	return session.GetPageMaxRedirect(getUrl, 1)
 }
 
-// post a form (easy version)
+// FormAction submits a form (easy version)
 func (session *Session) FormAction(page *Page, formSelector string, params map[string]string) (*Response, error) {
 	form, err := page.Form(formSelector)
 	if err != nil {
@@ -290,6 +297,7 @@ func (session *Session) FormAction(page *Page, formSelector string, params map[s
 	return session.Submit(form)
 }
 
+// FollowSelectionLink opens a link specified by attr of the selection and returns a Response.
 func (session *Session) FollowSelectionLink(page *Page, selection *goquery.Selection, attr string) (*Response, error) {
 	numLink := selection.Length()
 	if numLink != 1 {
@@ -307,8 +315,12 @@ func (session *Session) FollowSelectionLink(page *Page, selection *goquery.Selec
 	return session.OpenURL(page, reqUrl)
 }
 
+// OpenURL invokes HTTP GET request with referer header as page's URL.
 func (session *Session) OpenURL(page *Page, url string) (*Response, error) {
-	req, _ := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Referer", page.Url.String())
 	return session.invoke(req)
 }
@@ -326,6 +338,7 @@ func (session *Session) FollowLink(page *Page, linkSelector string, attr string)
 	return session.FollowSelectionLink(page, selection, attr)
 }
 
+// Frame returns a Page of specified frameSelector.
 func (session *Session) Frame(page *Page, frameSelector string) (*Page, error) {
 	resp, err := session.FollowLink(page, frameSelector, "src")
 	if err != nil {

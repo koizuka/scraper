@@ -12,6 +12,7 @@ import (
 	"strings"
 )
 
+// Response holds a raw response and its request information.
 type Response struct {
 	Request     *http.Request
 	ContentType string
@@ -21,10 +22,13 @@ type Response struct {
 	Logger      Logger
 }
 
+// CsvReader returns csv.Reader of the response.
+// it assumes the response is a CSV.
 func (response *Response) CsvReader() *csv.Reader {
 	return csv.NewReader(utfbom.SkipOnly(bytes.NewBuffer(response.Body)))
 }
 
+// Page parses raw response to DOM tree and returns a Page object.
 func (response *Response) Page() (*Page, error) {
 	var doc *goquery.Document
 	var err error

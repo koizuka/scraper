@@ -61,7 +61,7 @@ func ExtractNumber(in string) (float64, error) {
 }
 
 type UnmarshalOption struct {
-	Attr string         // if nonempty, extract attribute of element. otherwise, uses Text()
+	Attr string         // if nonempty, extracts attribute of element. otherwise, uses Text()
 	Re   string         // Regular Expression. must contain one capture.
 	Time string         // for time.Time only. parse with this format.
 	Loc  *time.Location // time zone for parsing time.Time.
@@ -225,6 +225,12 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 	return nil
 }
 
+// Unmarshal parses selection and stores to v.
+// if v is a struct, each field may specify following tags.
+//  * `find` tag with CSS selector to specify sub element.
+//  * `attr` tag with attribute name to get a text. if this tag not exists, get a text from text element.
+//  * `re` tag with regular expression, use only matched substring from a text.
+//  * `time` tag with time format to parse for time.Time.
 func Unmarshal(v interface{}, selection *goquery.Selection, opt UnmarshalOption) error {
 	if opt.Loc == nil {
 		opt.Loc = time.UTC

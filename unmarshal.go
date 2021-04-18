@@ -199,7 +199,7 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		case string:
 			value.SetString(s)
 
-		case int, int32, int64:
+		case int, int8, int16, int32, int64:
 			reComma := regexp.MustCompile(",")
 			stripComma := func(s string) string {
 				return reComma.ReplaceAllString(s, "")
@@ -210,6 +210,18 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 				return err
 			}
 			value.SetInt(i)
+
+		case uint, uint8, uint16, uint32, uint64:
+			reComma := regexp.MustCompile(",")
+			stripComma := func(s string) string {
+				return reComma.ReplaceAllString(s, "")
+			}
+			var i uint64
+			_, err := fmt.Sscanf(stripComma(strings.TrimSpace(s)), "%d", &i)
+			if err != nil {
+				return err
+			}
+			value.SetUint(i)
 
 		case float32, float64:
 			f, err := ExtractNumber(s)

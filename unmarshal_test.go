@@ -75,7 +75,7 @@ func TestUnmarshall(t *testing.T) {
 
 }
 func TestUnmarshallInt(t *testing.T) {
-	html := `<div><p>42</p><span>123,456</span></div>`
+	html := `<div><p>42</p><span id="int">123,456</span><span id="uint">654321</span></div>`
 
 	page, err := createMashallerTestPage(html)
 	if err != nil {
@@ -98,7 +98,20 @@ func TestUnmarshallInt(t *testing.T) {
 	{
 		var value int
 		shouldBe := 123456
-		err = Unmarshal(&value, page.Find("span"), UnmarshalOption{})
+		err = Unmarshal(&value, page.Find("span#int"), UnmarshalOption{})
+		if err != nil {
+			t.Error(err)
+		}
+
+		if !reflect.DeepEqual(value, shouldBe) {
+			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		}
+	}
+
+	{
+		var value uint
+		var shouldBe uint = 654321
+		err = Unmarshal(&value, page.Find("span#uint"), UnmarshalOption{})
 		if err != nil {
 			t.Error(err)
 		}

@@ -117,7 +117,7 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		submatch := re.FindStringSubmatch(s)
 		n := len(submatch) - 1
 		if n != 1 {
-			return fmt.Errorf("re:%#v: matched count of the regular expression is %d, should be 1", opt.Re, n)
+			return fmt.Errorf("re:%#v: matched count of the regular expression is %d, should be 1, for text %#v", opt.Re, n, s)
 		}
 		s = submatch[1]
 	}

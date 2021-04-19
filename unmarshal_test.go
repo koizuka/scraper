@@ -155,6 +155,19 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
 		}
 	}
+
+	{
+		var value string
+		shouldBe := ""
+		err = Unmarshal(&value, page.Selection, UnmarshalOption{Re: `(nothing)`})
+		if err != nil {
+			t.Error(err)
+		}
+
+		if !reflect.DeepEqual(value, shouldBe) {
+			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		}
+	}
 }
 
 func TestUnmarshallFloat(t *testing.T) {

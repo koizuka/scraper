@@ -42,18 +42,18 @@ func (element *FormElement) AddAvailableValue(val *AvailableValue) {
 
 func (element *FormElement) GoString() string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "FormElement{\n")
-	fmt.Fprintf(buf, "  Type: %v\n", element.Type)
-	fmt.Fprintf(buf, "  Name: %v\n", element.Name)
-	fmt.Fprintf(buf, "  Value: %#v\n", element.Value)
+	_, _ = fmt.Fprintf(buf, "FormElement{\n")
+	_, _ = fmt.Fprintf(buf, "  Type: %v\n", element.Type)
+	_, _ = fmt.Fprintf(buf, "  Name: %v\n", element.Name)
+	_, _ = fmt.Fprintf(buf, "  Value: %#v\n", element.Value)
 	if element.AvailableValues != nil {
-		fmt.Fprintf(buf, "  AvailableValues: [")
+		_, _ = fmt.Fprintf(buf, "  AvailableValues: [")
 		for _, a := range element.AvailableValues {
-			fmt.Fprintf(buf, "%#v, ", a)
+			_, _ = fmt.Fprintf(buf, "%#v, ", a)
 		}
-		fmt.Fprintf(buf, "]\n")
+		_, _ = fmt.Fprintf(buf, "]\n")
 	}
-	fmt.Fprintf(buf, "}\n")
+	_, _ = fmt.Fprintf(buf, "}\n")
 	return buf.String()
 }
 
@@ -299,6 +299,7 @@ func (form *Form) Unset(name string) error {
 func (form *Form) Check(name string) error {
 	return form.Select(name, 0)
 }
+
 // Uncheck unchecks the checkbox specified by name.
 func (form *Form) Uncheck(name string) error {
 	return form.Unset(name)

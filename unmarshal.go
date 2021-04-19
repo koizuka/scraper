@@ -72,10 +72,50 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		return errors.New("value must CanSet")
 	}
 
+	type pair struct {
+		Sel  *goquery.Selection
+		Text string
+	}
+	selected := make([]pair, 0, sel.Length())
+	for i := 0; i < sel.Length(); i++ {
+		j := sel.Eq(i)
+
+		// extract text from Attr(attr) or Text()
+		var s string
+		if opt.Attr != "" {
+			if w, ok := j.Attr(opt.Attr); ok {
+				s = w
+			} else {
+				continue
+			}
+		} else {
+			s = j.Text()
+		}
+
+		// 正規表現パターンがあったら適用する
+		if opt.Re != "" {
+			re, err := regexp.Compile(opt.Re)
+			if err != nil {
+				return fmt.Errorf("re:%#v: %v", opt.Re, err)
+			}
+			submatch := re.FindStringSubmatch(s)
+			n := len(submatch) - 1
+			if n == -1 {
+				continue
+			} else if n != 1 {
+				return fmt.Errorf("re:%#v: matched count of the regular expression is %d, should be 0 or 1, for text %#v", opt.Re, n, s)
+			} else {
+				s = submatch[1]
+			}
+		}
+
+		selected = append(selected, pair{j, s})
+	}
+
 	if value.Kind() == reflect.Slice {
-		rv := reflect.MakeSlice(value.Type(), sel.Length(), sel.Length())
-		for i := 0; i < sel.Length(); i++ {
-			err := unmarshalValue(rv.Index(i), sel.Eq(i), opt)
+		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
+		for i := 0; i < len(selected); i++ {
+			err := unmarshalValue(rv.Index(i), selected[i].Sel, opt)
 			if err != nil {
 				return fmt.Errorf("#%d: %v", i, err)
 			}
@@ -85,7 +125,7 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 	}
 
 	if value.Kind() == reflect.Ptr {
-		if sel.Length() == 0 {
+		if len(selected) == 0 {
 			value.Set(reflect.Zero(value.Type()))
 			return nil
 		}
@@ -94,36 +134,12 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		value = newValue.Elem()
 	}
 
-	if sel.Length() != 1 {
-		return fmt.Errorf("length(%v) != 1", sel.Length())
+	if len(selected) != 1 {
+		return fmt.Errorf("length(%v) != 1", len(selected))
 	}
 
-	// extract text from Attr(attr) or Text()
-	var s string
-	if opt.Attr != "" {
-		if w, ok := sel.Attr(opt.Attr); ok {
-			s = w
-		}
-	} else {
-		s = sel.Text()
-	}
-
-	// 正規表現パターンがあったら適用する
-	if opt.Re != "" {
-		re, err := regexp.Compile(opt.Re)
-		if err != nil {
-			return fmt.Errorf("re:%#v: %v", opt.Re, err)
-		}
-		submatch := re.FindStringSubmatch(s)
-		n := len(submatch) - 1
-		if n == -1 {
-			s = "" // マッチしなかったら空文字列
-		} else if n != 1 {
-			return fmt.Errorf("re:%#v: matched count of the regular expression is %d, should be 0 or 1, for text %#v", opt.Re, n, s)
-		} else {
-			s = submatch[1]
-		}
-	}
+	sel = selected[0].Sel
+	s := selected[0].Text
 
 	switch value.Interface().(type) {
 	case time.Time:

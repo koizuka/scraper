@@ -157,8 +157,8 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 	}
 
 	{
-		var value string
-		shouldBe := ""
+		var value *string
+		var shouldBe *string = nil
 		err = Unmarshal(&value, page.Selection, UnmarshalOption{Re: `(nothing)`})
 		if err != nil {
 			t.Error(err)
@@ -234,7 +234,7 @@ func TestUnmarshallTime(t *testing.T) {
 
 func TestUnmarshallArray(t *testing.T) {
 	html := `<div><a href="1" /><a href="2" /><a /></div>`
-	shouldBe := []string{"1", "2", ""}
+	shouldBe := []string{"1", "2"}
 
 	page, err := createMashallerTestPage(html)
 	if err != nil {

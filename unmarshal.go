@@ -115,7 +115,7 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 	if value.Kind() == reflect.Slice {
 		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
 		for i := 0; i < len(selected); i++ {
-			err := unmarshalValue(rv.Index(i), selected[i].Sel, opt)
+			err := unmarshalValueOne(rv.Index(i), selected[i].Sel, selected[i].Text, opt)
 			if err != nil {
 				return fmt.Errorf("#%d: %v", i, err)
 			}
@@ -138,9 +138,10 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		return fmt.Errorf("length(%v) != 1", len(selected))
 	}
 
-	sel = selected[0].Sel
-	s := selected[0].Text
+	return unmarshalValueOne(value, selected[0].Sel, selected[0].Text, opt)
+}
 
+func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, opt UnmarshalOption) error {
 	switch value.Interface().(type) {
 	case time.Time:
 		if opt.Time == "" {

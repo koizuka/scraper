@@ -45,6 +45,15 @@ func (err UnmarshalFieldError) Error() string {
 	return fmt.Sprintf("%v: %v", strings.Join(fields, "."), e)
 }
 
+type UnmarshalParseNumberError struct {
+	Err error
+	Got string
+}
+
+func (err UnmarshalParseNumberError) Error() string {
+	return fmt.Sprintf("%v: %#v", err.Err, err.Got)
+}
+
 func stripchars(str, chr string) string {
 	return strings.Map(func(r rune) rune {
 		if !strings.ContainsRune(chr, r) {
@@ -227,7 +236,7 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 			var i int64
 			_, err := fmt.Sscanf(stripComma(strings.TrimSpace(s)), "%d", &i)
 			if err != nil {
-				return err
+				return UnmarshalParseNumberError{err, s}
 			}
 			value.SetInt(i)
 
@@ -239,7 +248,7 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 			var i uint64
 			_, err := fmt.Sscanf(stripComma(strings.TrimSpace(s)), "%d", &i)
 			if err != nil {
-				return err
+				return UnmarshalParseNumberError{err, s}
 			}
 			value.SetUint(i)
 

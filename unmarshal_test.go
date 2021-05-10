@@ -157,6 +157,20 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 	}
 
 	{
+		var value int
+		shouldBe := `expected integer: "US"`
+		err = Unmarshal(&value, page.Selection, UnmarshalOption{Re: `(US)`})
+		if err == nil {
+			t.Error(fmt.Errorf("must be an error"))
+		} else {
+			errorString := err.Error()
+			if errorString != shouldBe {
+				t.Errorf(fmt.Sprintf("%#v != %#v", errorString, shouldBe))
+			}
+		}
+	}
+
+	{
 		var value *string
 		var shouldBe *string = nil
 		err = Unmarshal(&value, page.Selection, UnmarshalOption{Re: `(nothing)`})
@@ -171,7 +185,7 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 }
 
 func TestUnmarshallFloat(t *testing.T) {
-	html := `<div>3.14159265</div>`
+	html := `<div>3.14159265</div><span>test</span>`
 
 	page, err := createMashallerTestPage(html)
 	if err != nil {
@@ -181,7 +195,7 @@ func TestUnmarshallFloat(t *testing.T) {
 	{
 		var value float64
 		shouldBe := 3.14159265
-		err = Unmarshal(&value, page.Selection, UnmarshalOption{})
+		err = Unmarshal(&value, page.Selection.Find("div"), UnmarshalOption{})
 		if err != nil {
 			t.Error(err)
 		}
@@ -191,6 +205,20 @@ func TestUnmarshallFloat(t *testing.T) {
 		}
 	}
 
+	// error
+	{
+		var value float64
+		shouldBe := `strconv.ParseFloat: parsing "test": invalid syntax`
+		err = Unmarshal(&value, page.Selection.Find("span"), UnmarshalOption{})
+		if err == nil {
+			t.Error(fmt.Errorf("shoulb be an error"))
+		} else {
+			errorString := err.Error()
+			if errorString != shouldBe {
+				t.Errorf(fmt.Sprintf("%#v != %#v", errorString, shouldBe))
+			}
+		}
+	}
 	// optional way
 	{
 		var value *float64

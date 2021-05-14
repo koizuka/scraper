@@ -72,8 +72,8 @@ func TestUnmarshall(t *testing.T) {
 	if value != shouldBe {
 		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, value, shouldBe))
 	}
-
 }
+
 func TestUnmarshallInt(t *testing.T) {
 	html := `<div><p>42</p><span id="int">123,456</span><span id="uint">654321</span></div>`
 
@@ -424,5 +424,38 @@ func TestUnmarshallUnexportedField(t *testing.T) {
 		if err != shouldBe {
 			t.Errorf(fmt.Sprintf("'%v' != '%v'", err, shouldBe))
 		}
+	}
+}
+
+func TestUnmarshallHtml(t *testing.T) {
+	html := `<div><a href="https://example.com">link</a><p>p</p></div>`
+	shouldBe := `<a href="https://example.com">link</a><p>p</p>`
+
+	page, err := createMashallerTestPage(html)
+	if err != nil {
+		t.Error(err)
+	}
+
+	name := "UnmarshalHtml value"
+	var value string
+	err = Unmarshal(&value, page.Find("div"), UnmarshalOption{Html: true})
+	if err != nil {
+		t.Error(err)
+	}
+	if value != shouldBe {
+		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, value, shouldBe))
+	}
+
+	name = "UnmarshalHtml tagValue"
+	type TagValue struct {
+		Html string `find:"div" html:""`
+	}
+	var tagValue TagValue
+	err = Unmarshal(&tagValue, page.Selection, UnmarshalOption{})
+	if err != nil {
+		t.Error(err)
+	}
+	if tagValue.Html != shouldBe {
+		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, tagValue.Html, shouldBe))
 	}
 }

@@ -74,6 +74,7 @@ type UnmarshalOption struct {
 	Re   string         // Regular Expression to match the text. must contain one capture.
 	Time string         // for time.Time only. parse with this format.
 	Loc  *time.Location // time zone for parsing time.Time.
+	Html bool           // get Html() rather than Text(). ignores Attr.
 }
 
 func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOption) error {
@@ -89,16 +90,24 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 	for i := 0; i < sel.Length(); i++ {
 		j := sel.Eq(i)
 
-		// extract text from Attr(attr) or Text()
+		// extract text from Html(), Attr(attr) or Text()
 		var s string
-		if opt.Attr != "" {
-			if w, ok := j.Attr(opt.Attr); ok {
-				s = w
-			} else {
-				continue
+		if opt.Html {
+			var err error
+			s, err = j.Html()
+			if err != nil {
+				return err
 			}
 		} else {
-			s = j.Text()
+			if opt.Attr != "" {
+				if w, ok := j.Attr(opt.Attr); ok {
+					s = w
+				} else {
+					continue
+				}
+			} else {
+				s = j.Text()
+			}
 		}
 
 		// 正規表現パターンがあったら適用する
@@ -187,6 +196,7 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 			const AttrTag = "attr"
 			const TimeTag = "time"
 			const ReTag = "re"
+			const HtmlTag = "html"
 
 			vt := value.Type()
 			for i := 0; i < vt.NumField(); i++ {
@@ -198,12 +208,14 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 				if selector != "" {
 					selected = sel.Find(selector)
 				}
+				_, isHtml := fieldType.Tag.Lookup(HtmlTag)
 
 				opt := UnmarshalOption{
 					Attr: fieldType.Tag.Get(AttrTag),
 					Time: fieldType.Tag.Get(TimeTag),
 					Re:   fieldType.Tag.Get(ReTag),
 					Loc:  opt.Loc,
+					Html: isHtml,
 				}
 
 				if fieldType.PkgPath != "" {
@@ -269,7 +281,8 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 // Unmarshal parses selection and stores to v.
 // if v is a struct, each field may specify following tags.
 //  * `find` tag with CSS selector to specify sub element.
-//  * `attr` tag with attribute name to get a text. if this tag does not exists, get a text from text element.
+//  * `html` if exists, gets HTML of the child elements as text. ignores `attr`.
+//  * `attr` tag with attribute name to get a text. if both `html` and `tag` do not exist, get a text from text element.
 //  * `re` tag with regular expression, use only matched substring from a text.
 //  * `time` tag with time format to parse for time.Time.
 func Unmarshal(v interface{}, selection *goquery.Selection, opt UnmarshalOption) error {

@@ -39,6 +39,24 @@ type Session struct {
 	jar                *cookiejar.Jar
 }
 
+type RequestError struct {
+	RequestURL *url.URL
+	Err        error
+}
+
+func (err RequestError) Error() string {
+	return fmt.Sprintf("%v request error: %v", err.RequestURL.String(), err.Err)
+}
+
+type ResponseError struct {
+	RequestURL *url.URL
+	Response   *http.Response
+}
+
+func (err ResponseError) Error() string {
+	return fmt.Sprintf("%v response code: %v", err.RequestURL.String(), err.Response.Status)
+}
+
 func NewSession(name string, log Logger) *Session {
 	jar, _ := cookiejar.New(nil)
 	return &Session{
@@ -152,14 +170,14 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 		response, err := session.client.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("%v request error: %v", req.URL.String(), err)
+			return nil, RequestError{req.URL, err}
 		}
 		defer response.Body.Close()
 
 		req = response.Request // update req.Url after redirects
 
 		if response.StatusCode/100 != 2 {
-			return nil, fmt.Errorf("%v response code: %v", req.URL.String(), response.StatusCode)
+			return nil, ResponseError{req.URL, response}
 		}
 
 		if session.ShowResponseHeader {

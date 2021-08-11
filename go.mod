@@ -8,5 +8,5 @@ require (
 	github.com/chromedp/chromedp v0.7.4
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/orirawlings/persistent-cookiejar v0.3.0
-	golang.org/x/text v0.3.6
+	golang.org/x/text v0.3.7
 )

@@ -9,18 +9,27 @@ import (
 	"path/filepath"
 )
 
-func (session *Session) NewChrome() (context.Context, context.CancelFunc, string, error) {
+type NewChromeOptions struct {
+	Headless bool
+}
+
+func (session *Session) NewChromeOpt(options NewChromeOptions) (context.Context, context.CancelFunc, string, error) {
 	chromeUserDataDir, err := filepath.Abs("./chromeUserData")
 	if err != nil {
 		return nil, func() {}, "", err
 	}
 
-	allocCtx, allocCancel := chromedp.NewExecAllocator(
-		context.Background(),
+	allocOptions := []chromedp.ExecAllocatorOption{
 		chromedp.UserDataDir(chromeUserDataDir),
-	// chromedp.Headless,// headlessにするにはこの2行を有効にするのだが、ちゃんと終わらない...
-	// chromedp.DisableGPU,
-	)
+	}
+	if options.Headless {
+		allocOptions = append(allocOptions,
+			chromedp.Headless,
+			chromedp.DisableGPU,
+		)
+	}
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
 
 	ctxt, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(session.Printf))
 	cancelFunc := func() {
@@ -53,4 +62,8 @@ func (session *Session) NewChrome() (context.Context, context.CancelFunc, string
 	}
 
 	return ctxt, cancelFunc, downloadPath, nil
+}
+
+func (session *Session) NewChrome() (context.Context, context.CancelFunc, string, error) {
+	return session.NewChromeOpt(NewChromeOptions{Headless: false})
 }

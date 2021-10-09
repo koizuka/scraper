@@ -263,7 +263,28 @@ func (session *Session) Get(getUrl string) (*Response, error) {
 	return session.invoke(req)
 }
 
-// GetPageMaxredirect gets the URL and follows HTTP meta refresh if response page contained that.
+// ApplyMetaCharset converts if head/meta.charset exists in the page, and it states different from Content-Type/charset of the response header
+func (session *Session) ApplyMetaCharset(resp *Response, page *Page) (*Page, error) {
+	metaCharset, exists := page.Find("head meta").Attr("charset")
+	metaEncoding := charsetEncoding(metaCharset)
+	if exists && metaEncoding != resp.Encoding {
+		// convert
+		b, err := convertEncodingToUtf8(resp.Body, metaEncoding)
+		if err != nil {
+			return nil, err
+		}
+		resp.Body = b
+		resp.Encoding = metaEncoding
+		page, err = resp.Page()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return page, nil
+}
+
+// GetPageMaxRedirect gets the URL and follows HTTP meta refresh if response page contained that.
 func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Page, error) {
 	resp, err := session.Get(getUrl)
 	if err != nil {
@@ -279,7 +300,7 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 			return session.GetPageMaxRedirect(url.String(), maxRedirect-1)
 		}
 	}
-	return page, nil
+	return session.ApplyMetaCharset(resp, page)
 }
 
 // ApplyRefresh mimics HTML Meta Refresh.

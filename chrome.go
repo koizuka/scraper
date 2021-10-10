@@ -7,10 +7,12 @@ import (
 	"github.com/chromedp/chromedp"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type NewChromeOptions struct {
 	Headless bool
+	Timeout  time.Duration
 }
 
 func (session *Session) NewChromeOpt(options NewChromeOptions) (context.Context, context.CancelFunc, string, error) {
@@ -32,6 +34,9 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (context.Context,
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
 
 	ctxt, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(session.Printf))
+	if options.Timeout != 0 {
+		ctxt, cancel = context.WithTimeout(ctxt, options.Timeout)
+	}
 	cancelFunc := func() {
 		cancel()
 		allocCancel()

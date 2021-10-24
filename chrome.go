@@ -2,9 +2,12 @@ package scraper
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -71,4 +74,33 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (context.Context,
 
 func (session *Session) NewChrome() (context.Context, context.CancelFunc, string, error) {
 	return session.NewChromeOpt(NewChromeOptions{Headless: false})
+}
+
+// NavigateChrome navigates to page URL and download html like Session.invoke
+func (session *Session) NavigateChrome(ctx context.Context, URL string) (*network.Response, error) {
+	var html string
+	resp, err := chromedp.RunResponse(ctx, chromedp.Tasks{
+		chromedp.Navigate(URL),
+		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	session.invokeCount++
+	filename := session.getHtmlFilename()
+	responseFilename := filename + ".response.json"
+
+	err = ioutil.WriteFile(filename, []byte(html), 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	jsonData, err := json.Marshal(resp)
+	err = ioutil.WriteFile(responseFilename, jsonData, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }

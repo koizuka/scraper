@@ -28,7 +28,7 @@ type Session struct {
 	client             http.Client
 	Encoding           encoding.Encoding // force charset over Content-Type response header
 	UserAgent          string            // specify User-Agent
-	FilePrefix         string            // prefix to directory of settion files
+	FilePrefix         string            // prefix to directory of session files
 	invokeCount        int
 	NotUseNetwork      bool // load from previously downloaded session files rather than network access
 	SaveToFile         bool // save downloaded pages to session directory
@@ -128,6 +128,10 @@ func convertEncodingToUtf8(body []byte, encoding encoding.Encoding) ([]byte, err
 	return b, nil
 }
 
+func (session *Session) getHtmlFilename() string {
+	return fmt.Sprintf("%v%v/%v.html", session.FilePrefix, session.Name, session.invokeCount)
+}
+
 func (session *Session) invoke(req *http.Request) (*Response, error) {
 	var body []byte
 	var contentType string
@@ -141,7 +145,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 	}
 
 	session.invokeCount++
-	filename := fmt.Sprintf("%v%v/%v.html", session.FilePrefix, session.Name, session.invokeCount)
+	filename := session.getHtmlFilename()
 	contentTypeFilename := filename + ".ContentType"
 
 	if session.ShowRequestHeader {

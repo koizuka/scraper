@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -83,7 +84,7 @@ func (session *Session) SetCookies(u *url.URL, cookies []*http.Cookie) {
 }
 
 func (session *Session) LoadCookie() error {
-	filename := fmt.Sprintf("%v%v/cookie", session.FilePrefix, session.Name)
+	filename := fmt.Sprintf("%v/cookie", session.getDirectory())
 
 	jar, err := cookiejar.New(&cookiejar.Options{
 		Filename:              filename,
@@ -128,8 +129,12 @@ func convertEncodingToUtf8(body []byte, encoding encoding.Encoding) ([]byte, err
 	return b, nil
 }
 
+func (session *Session) getDirectory() string {
+	return fmt.Sprintf("%v%v", session.FilePrefix, session.Name)
+}
+
 func (session *Session) getHtmlFilename() string {
-	return fmt.Sprintf("%v%v/%v.html", session.FilePrefix, session.Name, session.invokeCount)
+	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.invokeCount))
 }
 
 func (session *Session) invoke(req *http.Request) (*Response, error) {
@@ -137,8 +142,9 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 	var contentType string
 
 	if session.NotUseNetwork || session.SaveToFile {
-		if _, err := os.Stat(session.FilePrefix + session.Name); err != nil && os.IsNotExist(err) {
-			if err := os.Mkdir(session.FilePrefix+session.Name, os.FileMode(0744)); err != nil {
+		dirname := session.getDirectory()
+		if _, err := os.Stat(dirname); err != nil && os.IsNotExist(err) {
+			if err := os.Mkdir(dirname, os.FileMode(0744)); err != nil {
 				return nil, err
 			}
 		}

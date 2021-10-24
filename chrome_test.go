@@ -1,9 +1,7 @@
 package scraper
 
 import (
-	"context"
 	"fmt"
-	"github.com/chromedp/chromedp"
 	"github.com/google/go-cmp/cmp"
 	"io/ioutil"
 	"net/http"
@@ -14,7 +12,7 @@ import (
 	"time"
 )
 
-func TestSession_NavigateChrome(t *testing.T) {
+func TestSession_RunNavigate(t *testing.T) {
 	t.Run("got html", func(t *testing.T) {
 		// create a test server to serve the page
 		shouldBe := "<html><head></head><body>Hello World.</body></html>"
@@ -22,11 +20,6 @@ func TestSession_NavigateChrome(t *testing.T) {
 			_, _ = fmt.Fprint(w, shouldBe)
 		}))
 		defer ts.Close()
-
-		// create context
-		ctx, cancel := chromedp.NewContext(context.Background())
-		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
 
 		dir, err := ioutil.TempDir(".", "chrome_test*")
 		if err != nil {
@@ -44,8 +37,15 @@ func TestSession_NavigateChrome(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		if _, err := session.NavigateChrome(ctx, ts.URL); err != nil {
-			t.Errorf("NavigateChrome() error = %v", err)
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 10 * time.Second})
+		defer cancelFunc()
+		if err != nil {
+			t.Errorf("NewChromeOpt() error: %v", err)
+			return
+		}
+
+		if _, err := chromeSession.RunNavigate(ts.URL); err != nil {
+			t.Errorf("RunNavigate() error: %v", err)
 			return
 		}
 
@@ -70,11 +70,6 @@ func TestSession_NavigateChrome(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		// create context
-		ctx, cancel := chromedp.NewContext(context.Background())
-		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-
 		dir, err := ioutil.TempDir(".", "chrome_test*")
 		if err != nil {
 			t.Error(err)
@@ -91,9 +86,16 @@ func TestSession_NavigateChrome(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		resp, err := session.NavigateChrome(ctx, ts.URL)
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 10 * time.Second})
+		defer cancelFunc()
 		if err != nil {
-			t.Errorf("NavigateChrome() error = %v", err)
+			t.Errorf("NewChromeOpt() error: %v", err)
+			return
+		}
+
+		resp, err := chromeSession.RunNavigate(ts.URL)
+		if err != nil {
+			t.Errorf("RunNavigate() error: %v", err)
 			return
 		}
 		type values struct {

@@ -132,3 +132,7 @@ func (session *ChromeSession) actionChrome(action chromedp.Action) (*network.Res
 func (session *ChromeSession) RunNavigate(URL string) (*network.Response, error) {
 	return session.actionChrome(chromedp.Navigate(URL))
 }
+
+func (session *ChromeSession) Unmarshal(v interface{}, cssSelector string, opt UnmarshalOption) error {
+	return ChromeUnmarshal(session.Ctx, v, cssSelector, opt)
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 )
@@ -40,7 +41,7 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		)
 	}
 
-	downloadPath, err := filepath.Abs(session.FilePrefix + session.Name + "/chrome")
+	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))
 	if err != nil {
 		return nil, func() {}, err
 	}

@@ -96,14 +96,20 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 
 		session.invokeCount++
 		fn := session.getHtmlFilename()
-		err = ioutil.WriteFile(fn, []byte(html), 0644)
+		body := []byte(html)
+		err = ioutil.WriteFile(fn, body, 0644)
 		if err != nil {
 			return err
 		}
 		if filename != nil {
 			*filename = fn
 		}
-
+		session.Printf("**** SAVE to %v (%v bytes)\n", filename, len(body))
+		var title string
+		err = chromedp.Title(&title).Do(ctxt)
+		if err == nil {
+			session.Printf("* %v\n", title)
+		}
 		return nil
 	})
 }

@@ -104,7 +104,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 		if filename != nil {
 			*filename = fn
 		}
-		session.Printf("**** SAVE to %v (%v bytes)\n", filename, len(body))
+		session.Printf("**** SAVE to %v (%v bytes)\n", fn, len(body))
 		var title string
 		err = chromedp.Title(&title).Do(ctxt)
 		if err == nil {

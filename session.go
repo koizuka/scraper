@@ -105,16 +105,16 @@ func (session *Session) SaveCookie() error {
 
 // charsetEncoding parses chatset string and returns encoding.Encoding.
 func charsetEncoding(charset string) encoding.Encoding {
-	var encoding encoding.Encoding
+	var encode encoding.Encoding
 	switch strings.ToLower(charset) {
-	case "shift_jis", "windows-31j":
-		encoding = japanese.ShiftJIS
+	case "shift_jis", "windows-31j", "x-sjis":
+		encode = japanese.ShiftJIS
 	case "euc-jp":
-		encoding = japanese.EUCJP
+		encode = japanese.EUCJP
 	case "iso-2022-jp":
-		encoding = japanese.ISO2022JP
+		encode = japanese.ISO2022JP
 	}
-	return encoding
+	return encode
 }
 
 // convetEncodingToUtf8 converts body(given encoding) to UTF-8.
@@ -239,15 +239,15 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 	charSet := regexp.MustCompile(".*charset=(.*)").ReplaceAllString(contentType, "$1")
 
-	encoding := session.Encoding
-	if encoding == nil {
-		encoding = charsetEncoding(charSet)
+	encode := session.Encoding
+	if encode == nil {
+		encode = charsetEncoding(charSet)
 	}
-	if encoding != nil {
+	if encode != nil {
 		if session.ShowResponseHeader {
-			session.Printf("converting from %v...\n", encoding)
+			session.Printf("converting from %v...\n", encode)
 		}
-		b, err := convertEncodingToUtf8(body, encoding)
+		b, err := convertEncodingToUtf8(body, encode)
 		if err != nil {
 			return nil, err
 		}
@@ -259,7 +259,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		ContentType: contentType,
 		CharSet:     charSet,
 		Body:        body,
-		Encoding:    encoding,
+		Encoding:    encode,
 		Logger:      session,
 	}, nil
 }
@@ -305,9 +305,9 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 		return nil, err
 	}
 	if maxRedirect > 0 {
-		if url := page.MetaRefresh(); url != nil {
-			session.Printf("HTML Meta Refresh to: %v\n", url)
-			return session.GetPageMaxRedirect(url.String(), maxRedirect-1)
+		if newUrl := page.MetaRefresh(); newUrl != nil {
+			session.Printf("HTML Meta Refresh to: %v\n", newUrl)
+			return session.GetPageMaxRedirect(newUrl.String(), maxRedirect-1)
 		}
 	}
 	return session.ApplyMetaCharset(resp, page)
@@ -316,9 +316,9 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 // ApplyRefresh mimics HTML Meta Refresh.
 func (session *Session) ApplyRefresh(page *Page, maxRedirect int) (*Page, error) {
 	if maxRedirect > 0 {
-		if url := page.MetaRefresh(); url != nil {
-			session.Printf("HTML Meta Refresh to: %v\n", url)
-			return session.GetPageMaxRedirect(url.String(), maxRedirect-1)
+		if newUrl := page.MetaRefresh(); newUrl != nil {
+			session.Printf("HTML Meta Refresh to: %v\n", newUrl)
+			return session.GetPageMaxRedirect(newUrl.String(), maxRedirect-1)
 		}
 	}
 	return page, nil

@@ -137,6 +137,11 @@ func (session *Session) getHtmlFilename() string {
 	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.invokeCount))
 }
 
+func charsetFromContentType(contentType string) string {
+	charSet := regexp.MustCompile(".*charset=(.*)").ReplaceAllString(contentType, "$1")
+	return charSet
+}
+
 func (session *Session) invoke(req *http.Request) (*Response, error) {
 	var body []byte
 	var contentType string
@@ -237,7 +242,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		session.Printf("Content-type: %v\n", contentType)
 	}
 
-	charSet := regexp.MustCompile(".*charset=(.*)").ReplaceAllString(contentType, "$1")
+	charSet := charsetFromContentType(contentType)
 
 	encode := session.Encoding
 	if encode == nil {
@@ -273,10 +278,30 @@ func (session *Session) Get(getUrl string) (*Response, error) {
 	return session.invoke(req)
 }
 
-// ApplyMetaCharset converts if head/meta.charset exists in the page, and it states different from Content-Type/charset of the response header
-func (session *Session) ApplyMetaCharset(resp *Response, page *Page) (*Page, error) {
+func GetEncodingFromPageHead(page *Page) (encoding.Encoding, bool) {
+	newCharset := ""
+
 	metaCharset, exists := page.Find("head meta").Attr("charset")
-	metaEncoding := charsetEncoding(metaCharset)
+	if exists {
+		newCharset = metaCharset
+	}
+
+	metaContentType, exists := page.Find("head meta[http-equiv='Content-Type']").Attr("content")
+	if exists {
+		newCharset = charsetFromContentType(metaContentType)
+	}
+
+	if newCharset != "" {
+		return charsetEncoding(newCharset), true
+	} else {
+		return nil, false
+	}
+}
+
+// ApplyMetaCharset converts if head/meta.charset exists in the page, and it states different from Content-Type/charset of the response header
+
+func (session *Session) ApplyMetaCharset(resp *Response, page *Page) (*Page, error) {
+	metaEncoding, exists := GetEncodingFromPageHead(page)
 	if exists && metaEncoding != resp.Encoding {
 		// convert
 		b, err := convertEncodingToUtf8(resp.Body, metaEncoding)

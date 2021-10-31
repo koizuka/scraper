@@ -14,7 +14,7 @@ type Page struct {
 }
 
 // MetaRefresh returns a URL from "meta http-equiv=refresh" tag if it exists.
-// otherwise returns nil.
+// otherwise, returns nil.
 func (page *Page) MetaRefresh() *url.URL {
 	refresh := page.Find("meta[http-equiv=refresh]")
 	if refresh.Length() > 0 {
@@ -22,8 +22,8 @@ func (page *Page) MetaRefresh() *url.URL {
 			urlre := regexp.MustCompile("[uU][rR][lL]=(.*)$")
 			submatch := urlre.FindStringSubmatch(content)
 			if len(submatch) > 1 {
-				url, _ := page.BaseUrl.Parse(submatch[1])
-				return url
+				u, _ := page.BaseUrl.Parse(submatch[1])
+				return u
 			}
 		}
 	}

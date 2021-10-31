@@ -5,14 +5,11 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	cookiejar "github.com/orirawlings/persistent-cookiejar"
 	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/transform"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 )
 
@@ -103,43 +100,12 @@ func (session *Session) SaveCookie() error {
 	return session.jar.Save()
 }
 
-// charsetEncoding parses charset string and returns encoding.Encoding.
-func charsetEncoding(charset string) encoding.Encoding {
-	var encode encoding.Encoding
-	switch strings.ToLower(charset) {
-	case "shift_jis", "windows-31j", "x-sjis", "sjis", "cp932", "shift-jis":
-		encode = japanese.ShiftJIS
-	case "euc-jp":
-		encode = japanese.EUCJP
-	case "iso-2022-jp":
-		encode = japanese.ISO2022JP
-	}
-	return encode
-}
-
-// convertEncodingToUtf8 converts body(given encoding) to UTF-8.
-func convertEncodingToUtf8(body []byte, encoding encoding.Encoding) ([]byte, error) {
-	if encoding == nil {
-		return body, nil
-	}
-	b, _, err := transform.Bytes(encoding.NewDecoder(), body)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
 func (session *Session) getDirectory() string {
 	return fmt.Sprintf("%v%v", session.FilePrefix, session.Name)
 }
 
 func (session *Session) getHtmlFilename() string {
 	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.invokeCount))
-}
-
-func charsetFromContentType(contentType string) string {
-	charSet := regexp.MustCompile(".*charset=(.*)").ReplaceAllString(contentType, "$1")
-	return charSet
 }
 
 func (session *Session) invoke(req *http.Request) (*Response, error) {
@@ -244,29 +210,11 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		session.Printf("Content-type: %v\n", contentType)
 	}
 
-	charSet := charsetFromContentType(contentType)
-
-	encode := session.Encoding
-	if encode == nil {
-		encode = charsetEncoding(charSet)
-	}
-	if encode != nil {
-		if session.ShowResponseHeader {
-			session.Printf("converting from %v...\n", encode)
-		}
-		b, err := convertEncodingToUtf8(body, encode)
-		if err != nil {
-			return nil, err
-		}
-		body = b
-	}
-
 	return &Response{
 		Request:     req,
 		ContentType: contentType,
-		CharSet:     charSet,
-		Body:        body,
-		Encoding:    encode,
+		RawBody:     body,
+		Encoding:    session.Encoding,
 		Logger:      session,
 	}, nil
 }
@@ -290,13 +238,7 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 	if err != nil {
 		return nil, err
 	}
-	if maxRedirect > 0 {
-		if newUrl := page.MetaRefresh(); newUrl != nil {
-			session.Printf("HTML Meta Refresh to: %v\n", newUrl)
-			return session.GetPageMaxRedirect(newUrl.String(), maxRedirect-1)
-		}
-	}
-	return page, nil
+	return session.ApplyRefresh(page, maxRedirect)
 }
 
 // ApplyRefresh mimics HTML Meta Refresh.

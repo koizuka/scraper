@@ -8,8 +8,6 @@ import (
 	"golang.org/x/text/encoding"
 	"net/http"
 	"net/url"
-	"regexp"
-	"strings"
 )
 
 // Response holds a raw response and its request information.
@@ -38,24 +36,19 @@ func (response *Response) Page() (*Page, error) {
 	}
 
 	if response.Encoding == nil {
-		if content, ok := doc.Find("meta[http-equiv=Content-Type]").Attr("content"); ok {
-			m := regexp.MustCompile(`\bcharset=(\w*)`).FindStringSubmatch(strings.ToLower(content))
-			if len(m) == 2 {
-				if encoding := charsetEncoding(m[1]); encoding != nil {
-					response.Logger.Printf("converting from %v...\n", encoding)
-					b, err := convertEncodingToUtf8(response.Body, encoding)
-					if err != nil {
-						return nil, err
-					}
-					response.Body = b
-					response.Encoding = encoding
+		if encode, ok := GetEncodingFromHead(doc); ok {
+			response.Logger.Printf("converting from %v...\n", encode)
+			b, err := convertEncodingToUtf8(response.Body, encode)
+			if err != nil {
+				return nil, err
+			}
+			response.Body = b
+			response.Encoding = encode
 
-					// replace doc with converted body
-					doc, err = goquery.NewDocumentFromReader(bytes.NewBuffer(response.Body))
-					if err != nil {
-						return nil, err
-					}
-				}
+			// replace doc with converted body
+			doc, err = goquery.NewDocumentFromReader(bytes.NewBuffer(response.Body))
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -78,4 +71,24 @@ func (response *Response) Page() (*Page, error) {
 	response.Logger.Printf("* %v\n", doc.Find("title").Text())
 
 	return &Page{doc, baseUrl, response.Logger}, err
+}
+
+func GetEncodingFromHead(page *goquery.Document) (encoding.Encoding, bool) {
+	newCharset := ""
+
+	metaCharset, exists := page.Find("head meta").Attr("charset")
+	if exists {
+		newCharset = metaCharset
+	}
+
+	metaContentType, exists := page.Find("head meta[http-equiv='Content-Type']").Attr("content")
+	if exists {
+		newCharset = charsetFromContentType(metaContentType)
+	}
+
+	if newCharset != "" {
+		return charsetEncoding(newCharset), true
+	} else {
+		return nil, false
+	}
 }

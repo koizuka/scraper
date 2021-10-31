@@ -103,11 +103,11 @@ func (session *Session) SaveCookie() error {
 	return session.jar.Save()
 }
 
-// charsetEncoding parses chatset string and returns encoding.Encoding.
+// charsetEncoding parses charset string and returns encoding.Encoding.
 func charsetEncoding(charset string) encoding.Encoding {
 	var encode encoding.Encoding
 	switch strings.ToLower(charset) {
-	case "shift_jis", "windows-31j", "x-sjis":
+	case "shift_jis", "windows-31j", "x-sjis", "sjis", "cp932", "shift-jis":
 		encode = japanese.ShiftJIS
 	case "euc-jp":
 		encode = japanese.EUCJP
@@ -117,7 +117,7 @@ func charsetEncoding(charset string) encoding.Encoding {
 	return encode
 }
 
-// convetEncodingToUtf8 converts body(given encoding) to UTF-8.
+// convertEncodingToUtf8 converts body(given encoding) to UTF-8.
 func convertEncodingToUtf8(body []byte, encoding encoding.Encoding) ([]byte, error) {
 	if encoding == nil {
 		return body, nil
@@ -187,7 +187,9 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		if err != nil {
 			return nil, RequestError{req.URL, err}
 		}
-		defer response.Body.Close()
+		defer func() {
+			_ = response.Body.Close()
+		}()
 
 		req = response.Request // update req.Url after redirects
 
@@ -278,47 +280,6 @@ func (session *Session) Get(getUrl string) (*Response, error) {
 	return session.invoke(req)
 }
 
-func GetEncodingFromPageHead(page *Page) (encoding.Encoding, bool) {
-	newCharset := ""
-
-	metaCharset, exists := page.Find("head meta").Attr("charset")
-	if exists {
-		newCharset = metaCharset
-	}
-
-	metaContentType, exists := page.Find("head meta[http-equiv='Content-Type']").Attr("content")
-	if exists {
-		newCharset = charsetFromContentType(metaContentType)
-	}
-
-	if newCharset != "" {
-		return charsetEncoding(newCharset), true
-	} else {
-		return nil, false
-	}
-}
-
-// ApplyMetaCharset converts if head/meta.charset exists in the page, and it states different from Content-Type/charset of the response header
-
-func (session *Session) ApplyMetaCharset(resp *Response, page *Page) (*Page, error) {
-	metaEncoding, exists := GetEncodingFromPageHead(page)
-	if exists && metaEncoding != resp.Encoding {
-		// convert
-		b, err := convertEncodingToUtf8(resp.Body, metaEncoding)
-		if err != nil {
-			return nil, err
-		}
-		resp.Body = b
-		resp.Encoding = metaEncoding
-		page, err = resp.Page()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return page, nil
-}
-
 // GetPageMaxRedirect gets the URL and follows HTTP meta refresh if response page contained that.
 func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Page, error) {
 	resp, err := session.Get(getUrl)
@@ -335,7 +296,7 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 			return session.GetPageMaxRedirect(newUrl.String(), maxRedirect-1)
 		}
 	}
-	return session.ApplyMetaCharset(resp, page)
+	return page, nil
 }
 
 // ApplyRefresh mimics HTML Meta Refresh.

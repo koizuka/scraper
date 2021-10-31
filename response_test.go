@@ -14,8 +14,8 @@ import (
 	"testing"
 )
 
-func createHtmlResponse(html string, encoding encoding.Encoding) (*Response, error) {
-	request, err := http.NewRequest("GET", "http://localhost/", nil)
+func createHtmlResponse(html string, encoding encoding.Encoding, baseURL string) (*Response, error) {
+	request, err := http.NewRequest("GET", baseURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -127,33 +127,48 @@ func TestGetEncodingFromHead(t *testing.T) {
 }
 
 func TestResponse_Page(t *testing.T) {
+	type result struct {
+		Text    string
+		BaseUrl string
+	}
 	type test struct {
 		name      string
 		html      string
+		url       string
 		encoding  encoding.Encoding
 		wantQuery string
-		want      string
+		want      result
 	}
 	tests := []test{
 		{
 			name:      "plain",
 			html:      `<body><p>日本語</p></body>`,
+			url:       "http://localhost/",
 			encoding:  nil,
 			wantQuery: "p",
-			want:      "日本語",
+			want:      result{"日本語", "http://localhost/"},
 		},
 		{
 			name:      "converted",
 			html:      `<head><meta charset="Shift_JIS"></head><body><p>日本語</p></body>`,
+			url:       "http://localhost/",
 			encoding:  japanese.ShiftJIS,
 			wantQuery: "p",
-			want:      "日本語",
+			want:      result{"日本語", "http://localhost/"},
+		},
+		{
+			name:      "base URL",
+			html:      `<head><base href="http://example.com/"></base><body><p></p></body>`,
+			url:       "http://localhost/",
+			encoding:  nil,
+			wantQuery: "p",
+			want:      result{"", "http://example.com/"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			response, err := createHtmlResponse(tt.html, tt.encoding)
+			response, err := createHtmlResponse(tt.html, tt.encoding, tt.url)
 			if err != nil {
 				t.Error("creatHtmlResponse", err)
 				return
@@ -163,7 +178,10 @@ func TestResponse_Page(t *testing.T) {
 				t.Errorf("Page() error = %v", err)
 				return
 			}
-			got := page.Find(tt.wantQuery).Text()
+			got := result{
+				page.Find(tt.wantQuery).Text(),
+				page.BaseUrl.String(),
+			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("(-want +got)\n%v", diff)
 			}

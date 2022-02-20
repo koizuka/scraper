@@ -28,7 +28,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		defer os.RemoveAll(dir)
 
 		sessionName := "chrome_test"
-		err = os.Mkdir(path.Join(dir, sessionName), 0644)
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
 		if err != nil {
 			t.Error(err)
 		}
@@ -77,7 +77,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		defer os.RemoveAll(dir)
 
 		sessionName := "chrome_test"
-		err = os.Mkdir(path.Join(dir, sessionName), 0644)
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
 		if err != nil {
 			t.Error(err)
 		}

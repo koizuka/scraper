@@ -238,25 +238,68 @@ func TestUnmarshallFloat(t *testing.T) {
 }
 
 func TestUnmarshallTime(t *testing.T) {
-	html := `<div>1986/4/1 12:34</div>`
+	type table struct {
+		HTML      string
+		Format    string
+		Location  *time.Location
+		Expect    time.Time
+		ExpectErr string
+	}
+	loc, _ := time.LoadLocation("Asia/Tokyo")
 
-	page, err := createMashallerTestPage(html)
-	if err != nil {
-		t.Error(err)
+	testData := []table{
+		{
+			HTML:   `<div>1986/4/1 12:34</div>`,
+			Format: "2006/1/2 03:04",
+			Expect: time.Date(1986, time.April, 1, 12, 34, 0, 0, time.UTC),
+		},
+		{
+			HTML:     `1999/04/01 12:34`,
+			Format:   "2006/01/02 03:04",
+			Location: loc,
+			Expect:   time.Date(1999, time.April, 1, 12, 34, 0, 0, loc),
+		},
+		{
+			HTML:      "abc",
+			Format:    "2006/1/2 03:04",
+			ExpectErr: `parsing time "abc" as "2006/1/2 03:04": cannot parse "abc" as "2006"`,
+		},
 	}
 
-	var value *time.Time
-	shouldBe := time.Date(1986, time.April, 1, 12, 34, 0, 0, time.UTC)
-	err = Unmarshal(&value, page.Selection, UnmarshalOption{Time: "2006/1/2 03:04"})
-	if err != nil {
-		t.Error(err)
-	}
+	for i, item := range testData {
+		html := item.HTML
+		format := item.Format
+		location := item.Location
+		shouldBe := item.Expect
 
-	if value == nil {
-		t.Errorf("value is nil")
-	}
-	if !shouldBe.Equal(*value) {
-		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		page, err := createMashallerTestPage(html)
+		if err != nil {
+			t.Error(fmt.Sprintf("%v: prepare html(%#v): %v", i, html, err))
+			continue
+		}
+
+		var value *time.Time
+		err = Unmarshal(&value, page.Selection, UnmarshalOption{Time: format, Loc: location})
+		if item.ExpectErr == "" {
+			if err != nil {
+				t.Error(fmt.Sprintf("%v: Unmarshal(%#v, %#v): %v", i, html, format, err))
+				continue
+			}
+
+			if value == nil {
+				t.Errorf(fmt.Sprintf("%v: Unmarshal(%#v, %#v): value is nil", i, html, format))
+				continue
+			}
+
+			if !shouldBe.Equal(*value) {
+				t.Errorf(fmt.Sprintf("%v: Unmarshal(%#v, %#v): %#v != %#v", i, html, format, value, shouldBe))
+			}
+		} else {
+			s := err.Error()
+			if item.ExpectErr != s {
+				t.Errorf(fmt.Sprintf("%v: Unmarshal(%#v, %#v): error %#v != %#v", i, html, format, s, item.ExpectErr))
+			}
+		}
 	}
 }
 

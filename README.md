@@ -6,7 +6,7 @@
 	var logger scraper.ConsoleLogger
 	session := scraper.NewSession("session-name", logger) // session-name はログフォルダ名になる
 
-	// cookieを読む ( sessio-name/cookie というファイルを使う)
+	// cookieを読む ( session-name/cookie というファイルを使う)
 	err := session.LoadCookie()
 	if err != nil {
 		log.Fatal(err)

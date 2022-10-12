@@ -9,5 +9,5 @@ require (
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/google/go-cmp v0.5.9
 	github.com/orirawlings/persistent-cookiejar v0.3.2
-	golang.org/x/text v0.3.7
+	golang.org/x/text v0.3.8
 )

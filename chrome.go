@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"io/ioutil"
 	"os"
@@ -68,7 +68,7 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 	// configure to download behavior
 	err = chromedp.Run(ctxt,
 		chromedp.ActionFunc(func(ctxt context.Context) error {
-			err := page.SetDownloadBehavior("allow").WithDownloadPath(downloadPath).Do(ctxt)
+			err := browser.SetDownloadBehavior("allow").WithDownloadPath(downloadPath).Do(ctxt)
 			if err != nil {
 				return err
 			}

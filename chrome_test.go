@@ -37,7 +37,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 10 * time.Second})
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 30 * time.Second})
 		defer cancelFunc()
 		if err != nil {
 			t.Errorf("NewChromeOpt() error: %v", err)

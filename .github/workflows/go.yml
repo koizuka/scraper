@@ -26,3 +26,5 @@ jobs:
 
     - name: Test
       run: sudo go test -v ./...
+      env:
+        TZ: Asia/Tokyo

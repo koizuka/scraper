@@ -10,5 +10,5 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/orirawlings/persistent-cookiejar v0.3.2
 	golang.org/x/crypto v0.1.0 // indirect
-	golang.org/x/text v0.12.0
+	golang.org/x/text v0.13.0
 )

@@ -19,9 +19,14 @@ func (error LoginError) Error() string {
 }
 
 type UnexpectedContentTypeError struct {
+	Expected string
+	Actual   string
 }
 
 func (error UnexpectedContentTypeError) Error() string {
+	if error.Expected != "" || error.Actual != "" {
+		return fmt.Sprintf("Unexpected Content-Type received. Expected: %v, Actual: %v", error.Expected, error.Actual)
+	}
 	return "Unexpected Content-Type received"
 }
 

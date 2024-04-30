@@ -41,6 +41,22 @@ func TestChromeUnmarshal(t *testing.T) {
   <div>
   </div>
 </div>
+<table id="table">
+  <tr>
+	<td>10</td>
+	<td>11</td>
+  </tr>	
+  <tr>
+	<td>20</td>
+  </tr>	
+  <tr>
+	<td>30</td>
+	<td>31</td>
+  </tr>	
+  <tr>
+	<td>40</td>
+  </tr>	
+</table>
 </body>
 </html>
 `,
@@ -69,12 +85,28 @@ func TestChromeUnmarshal(t *testing.T) {
 		Span *string `find:"span"`
 	}
 
+	type TableOdd struct {
+		Odd1 int    `find:"td:nth-of-type(1)"`
+		Odd2 string `find:"td:nth-of-type(2)"`
+	}
+	type TableEven struct {
+		Even1 int `find:"td"`
+	}
+	type TableRecord struct {
+		Odd  []TableOdd  `find:"tr:nth-of-type(2n+1)"`
+		Even []TableEven `find:"tr:nth-of-type(2n)"`
+	}
+
 	type TestRecord struct {
-		H1       H1Record   `find:"h1"`
-		Num2     int        `find:"div#numbers div:nth-of-type(2)"`
-		Numbers  []int      `find:"div#numbers div" ignore:"3"`
-		Date     time.Time  `find:"div#date" time:"2006年1月2日"`
-		Optional []optional `find:"div#optional div"`
+		H1       H1Record    `find:"h1"`
+		Num2     int         `find:"div#numbers div:nth-of-type(2)"`
+		NumEven  int         `find:"div#numbers div:nth-of-type(even)"`
+		NumOdd   []int       `find:"div#numbers div:nth-of-type(odd)"`
+		Num2n    int         `find:"div#numbers div:nth-of-type(2n)"`
+		Numbers  []int       `find:"div#numbers div" ignore:"3"`
+		Date     time.Time   `find:"div#date" time:"2006年1月2日"`
+		Optional []optional  `find:"div#optional div"`
+		Table    TableRecord `find:"table#table"`
 	}
 
 	var record TestRecord
@@ -97,12 +129,174 @@ func TestChromeUnmarshal(t *testing.T) {
 			El:    "el",
 		},
 		Num2:     2,
+		NumEven:  2,
+		NumOdd:   []int{1, 3},
+		Num2n:    2,
 		Numbers:  []int{1, 2, 0},
 		Date:     time.Date(2001, time.February, 3, 0, 0, 0, 0, time.UTC),
 		Optional: []optional{{Span: &exist}, {Span: nil}},
+		Table: TableRecord{
+			Odd: []TableOdd{
+				{Odd1: 10, Odd2: "11"},
+				{Odd1: 30, Odd2: "31"},
+			},
+			Even: []TableEven{
+				{Even1: 20},
+				{Even1: 40},
+			},
+		},
 	}
 	if !reflect.DeepEqual(record, shouldBe) {
 		diff := cmp.Diff(shouldBe, record)
 		t.Errorf("ChromeUnmarshal() (-want +got)\n%v", diff)
+	}
+}
+
+func Test_resolveNthOfType(t *testing.T) {
+	type args struct {
+		cssSelector string
+		n           int
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "odd",
+			args: args{
+				cssSelector: "div:nth-of-type(odd)",
+				n:           1,
+			},
+			want: "div:nth-of-type(3)",
+		},
+		{
+			name: "even(1)",
+			args: args{
+				cssSelector: "div:nth-of-type(even)",
+				n:           1,
+			},
+			want: "div:nth-of-type(4)",
+		},
+		{
+			name: "even(0)",
+			args: args{
+				cssSelector: "div:nth-of-type(even)",
+				n:           0,
+			},
+			want: "div:nth-of-type(2)",
+		},
+		{
+			name: "2n (=even)",
+			args: args{
+				cssSelector: "div:nth-of-type(2n)",
+				n:           1,
+			},
+			want: "div:nth-of-type(4)",
+		},
+		{
+			name: "2n+1 (=odd)",
+			args: args{
+				cssSelector: "div:nth-of-type(2n+1)",
+				n:           1,
+			},
+			want: "div:nth-of-type(3)",
+		},
+		{
+			name: "2",
+			args: args{
+				cssSelector: "div:nth-of-type(2)",
+				n:           1,
+			},
+			want: "div:nth-of-type(2)",
+		},
+		{
+			name: "no nth-of-type",
+			args: args{
+				cssSelector: "div",
+				n:           1,
+			},
+			want: "div:nth-of-type(2)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveNthOfType(tt.args.cssSelector, tt.args.n); got != tt.want {
+				t.Errorf("resolveNthOfType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_parseNthOfTypeParam(t *testing.T) {
+	type args struct {
+		cssSelector string
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  string
+		want1 int
+		want2 int
+	}{
+		{
+			name: "2n+1",
+			args: args{
+				cssSelector: "test:nth-of-type(2n+1)",
+			},
+			want:  "test",
+			want1: 2,
+			want2: 1,
+		},
+		{
+			name: "3n",
+			args: args{
+				cssSelector: "test:nth-of-type(3n)",
+			},
+			want:  "test",
+			want1: 3,
+			want2: 0,
+		},
+		{
+			name: "even",
+			args: args{
+				cssSelector: "test:nth-of-type(even)",
+			},
+			want:  "test",
+			want1: 2,
+			want2: 0,
+		},
+		{
+			name: "1",
+			args: args{
+				cssSelector: "test:nth-of-type(1)",
+			},
+			want:  "test",
+			want1: 0,
+			want2: 1,
+		},
+		{
+			name: "test",
+			args: args{
+				cssSelector: "test",
+			},
+			want:  "test",
+			want1: 0,
+			want2: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1, got2 := parseNthOfTypeParam(tt.args.cssSelector)
+			if got != tt.want {
+				t.Errorf("parseNthOfTypeParam() got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.want1 {
+				t.Errorf("parseNthOfTypeParam() got1 = %v, want %v", got1, tt.want1)
+			}
+			if got2 != tt.want2 {
+				t.Errorf("parseNthOfTypeParam() got2 = %v, want %v", got2, tt.want2)
+			}
+		})
 	}
 }

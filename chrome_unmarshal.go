@@ -8,16 +8,59 @@ import (
 	"github.com/chromedp/chromedp"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
+
+func parseNthOfTypeParam(cssSelector string) (string, int, int) {
+	regex := regexp.MustCompile(`(.*):nth-of-type\((odd|even|(?:(\d+)n)?\+?(\d+)?)\)$`)
+	matched := regex.FindStringSubmatch(cssSelector)
+	if len(matched) == 0 {
+		return cssSelector, 0, 0
+	}
+	var a int
+	var b int
+	if matched[3] != "" {
+		a, _ = strconv.Atoi(matched[3])
+	}
+	if matched[4] != "" {
+		b, _ = strconv.Atoi(matched[4])
+	}
+	if matched[2] == "even" {
+		a = 2
+		b = 0
+	} else if matched[2] == "odd" {
+		a = 2
+		b = 1
+	}
+	return matched[1], a, b
+}
+
+func resolveNthOfType(cssSelector string, n int) string {
+	selectors := strings.Split(cssSelector, " ")
+	last := selectors[len(selectors)-1]
+	prefix, a, b := parseNthOfTypeParam(last)
+	x := 1
+	if a == 0 && b == 0 {
+		x = n + 1
+	} else if a == 0 || a == 1 {
+		x = b
+	} else {
+		if b < 1 {
+			b = a
+		}
+		x = n*a + b
+	}
+	return fmt.Sprintf("%v:nth-of-type(%v)", prefix, x)
+}
 
 func fillValue(ctx context.Context, cssSelector string, value reflect.Value, selected []string, opt UnmarshalOption) error {
 	// texts
 	if value.Kind() == reflect.Slice {
 		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
 		for i := 0; i < len(selected); i++ {
-			err := fillValue(ctx, fmt.Sprintf("%v:nth-of-type(%v)", cssSelector, i+1), rv.Index(i), []string{selected[i]}, opt)
+			err := fillValue(ctx, resolveNthOfType(cssSelector, i), rv.Index(i), []string{selected[i]}, opt)
 			if err != nil {
 				return fmt.Errorf("#%d: %v", i, err)
 			}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"math"
 	"net/url"
 	"reflect"
@@ -500,5 +501,51 @@ func TestUnmarshallHtml(t *testing.T) {
 	}
 	if tagValue.Html != shouldBe {
 		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, tagValue.Html, shouldBe))
+	}
+}
+
+func TestUnmarshalStringIgnore(t *testing.T) {
+	html := `<div><p>test</p></div>`
+	selector := "p"
+
+	tests := []struct {
+		name string
+		opt  UnmarshalOption
+		want string
+	}{
+		{
+			name: "not ignored(default)",
+			opt:  UnmarshalOption{},
+			want: "test",
+		},
+		{
+			name: "not ignored(mismatch)",
+			opt:  UnmarshalOption{Ignore: "ignore"},
+			want: "test",
+		},
+		{
+			name: "ignored",
+			opt:  UnmarshalOption{Ignore: "test"},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, err := createMashallerTestPage(html)
+			if err != nil {
+				t.Error(err)
+			}
+
+			var value string
+			err = Unmarshal(&value, page.Find(selector), tt.opt)
+			if err != nil {
+				t.Error(err)
+			}
+
+			if value != tt.want {
+				diff := cmp.Diff(value, tt.want)
+				t.Errorf(fmt.Sprintf("%#v", diff))
+			}
+		})
 	}
 }

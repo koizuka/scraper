@@ -43,6 +43,11 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 
 	s := selected[0]
 
+	if opt.Ignore != "" && s == opt.Ignore {
+		value.Set(reflect.Zero(value.Type()))
+		return nil
+	}
+
 	switch value.Interface().(type) {
 	case time.Time:
 		if opt.Time == "" {
@@ -124,6 +129,7 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 	const TimeTag = "time"
 	const ReTag = "re"
 	const HtmlTag = "html"
+	const IgnoreTag = "ignore"
 
 	type tempItem struct {
 		Text string
@@ -225,7 +231,9 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 
 		opt.Time = fieldType.Tag.Get(TimeTag)
 		opt.Attr = fieldType.Tag.Get(AttrTag)
+		opt.Ignore = fieldType.Tag.Get(IgnoreTag)
 		optFind := fieldType.Tag.Get(FindTag)
+
 		err := fillValue(ctx, fmt.Sprintf("%v %v", cssSelector, optFind), fieldValue, selected, opt)
 		if err != nil {
 			return UnmarshalFieldError{

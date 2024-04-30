@@ -70,11 +70,12 @@ func ExtractNumber(in string) (float64, error) {
 }
 
 type UnmarshalOption struct {
-	Attr string         // if nonempty, get attribute text of the element. get Text() otherwise.
-	Re   string         // Regular Expression to match the text. must contain one capture.
-	Time string         // for time.Time only. parse with this format.
-	Loc  *time.Location // time zone for parsing time.Time.
-	Html bool           // get Html() rather than Text(). ignores Attr.
+	Attr   string         // if nonempty, get attribute text of the element. get Text() otherwise.
+	Re     string         // Regular Expression to match the text. must contain one capture.
+	Time   string         // for time.Time only. parse with this format.
+	Loc    *time.Location // time zone for parsing time.Time.
+	Html   bool           // get Html() rather than Text(). ignores Attr.
+	Ignore string         // is string matches, results zero value.
 }
 
 func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOption) error {
@@ -156,6 +157,13 @@ func unmarshalValue(value reflect.Value, sel *goquery.Selection, opt UnmarshalOp
 		return fmt.Errorf("length(%v) != 1", len(selected))
 	}
 
+	if opt.Ignore != "" {
+		if selected[0].Text == opt.Ignore {
+			value.Set(reflect.Zero(value.Type()))
+			return nil
+		}
+	}
+
 	return unmarshalValueOne(value, selected[0].Sel, selected[0].Text, opt)
 }
 
@@ -197,6 +205,7 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 			const TimeTag = "time"
 			const ReTag = "re"
 			const HtmlTag = "html"
+			const IgnoreTag = "ignore"
 
 			vt := value.Type()
 			for i := 0; i < vt.NumField(); i++ {
@@ -211,11 +220,12 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 				_, isHtml := fieldType.Tag.Lookup(HtmlTag)
 
 				opt := UnmarshalOption{
-					Attr: fieldType.Tag.Get(AttrTag),
-					Time: fieldType.Tag.Get(TimeTag),
-					Re:   fieldType.Tag.Get(ReTag),
-					Loc:  opt.Loc,
-					Html: isHtml,
+					Attr:   fieldType.Tag.Get(AttrTag),
+					Time:   fieldType.Tag.Get(TimeTag),
+					Re:     fieldType.Tag.Get(ReTag),
+					Loc:    opt.Loc,
+					Html:   isHtml,
+					Ignore: fieldType.Tag.Get(IgnoreTag),
 				}
 
 				if fieldType.PkgPath != "" {
@@ -280,11 +290,11 @@ func unmarshalValueOne(value reflect.Value, sel *goquery.Selection, s string, op
 
 // Unmarshal parses selection and stores to v.
 // if v is a struct, each field may specify following tags.
-//  * `find` tag with CSS selector to specify sub element.
-//  * `html` if exists, gets HTML of the child elements as text. ignores `attr`.
-//  * `attr` tag with attribute name to get a text. if both `html` and `tag` do not exist, get a text from text element.
-//  * `re` tag with regular expression, use only matched substring from a text.
-//  * `time` tag with time format to parse for time.Time.
+//   - `find` tag with CSS selector to specify sub element.
+//   - `html` if exists, gets HTML of the child elements as text. ignores `attr`.
+//   - `attr` tag with attribute name to get a text. if both `html` and `tag` do not exist, get a text from text element.
+//   - `re` tag with regular expression, use only matched substring from a text.
+//   - `time` tag with time format to parse for time.Time.
 func Unmarshal(v interface{}, selection *goquery.Selection, opt UnmarshalOption) error {
 	if opt.Loc == nil {
 		opt.Loc = time.UTC

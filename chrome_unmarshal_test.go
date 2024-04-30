@@ -72,7 +72,7 @@ func TestChromeUnmarshal(t *testing.T) {
 	type TestRecord struct {
 		H1       H1Record   `find:"h1"`
 		Num2     int        `find:"div#numbers div:nth-of-type(2)"`
-		Numbers  []int      `find:"div#numbers div"`
+		Numbers  []int      `find:"div#numbers div" ignore:"3"`
 		Date     time.Time  `find:"div#date" time:"2006年1月2日"`
 		Optional []optional `find:"div#optional div"`
 	}
@@ -97,7 +97,7 @@ func TestChromeUnmarshal(t *testing.T) {
 			El:    "el",
 		},
 		Num2:     2,
-		Numbers:  []int{1, 2, 3},
+		Numbers:  []int{1, 2, 0},
 		Date:     time.Date(2001, time.February, 3, 0, 0, 0, 0, time.UTC),
 		Optional: []optional{{Span: &exist}, {Span: nil}},
 	}

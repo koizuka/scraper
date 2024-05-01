@@ -84,7 +84,7 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 	}
 
 	if len(selected) != 1 {
-		return fmt.Errorf("length(%v) != 1", len(selected))
+		return fmt.Errorf("length(%v) != 1 (sel:%#v)", len(selected), cssSelector)
 	}
 
 	s := selected[0]

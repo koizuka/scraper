@@ -218,6 +218,14 @@ func Test_resolveNthOfType(t *testing.T) {
 			},
 			want: "div:nth-of-type(2)",
 		},
+		{
+			name: "child tree",
+			args: args{
+				cssSelector: "div div:nth-of-type(2n+1)",
+				n:           1,
+			},
+			want: "div div:nth-of-type(3)",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

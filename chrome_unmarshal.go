@@ -53,7 +53,8 @@ func resolveNthOfType(cssSelector string, n int) string {
 		}
 		x = n*a + b
 	}
-	return fmt.Sprintf("%v:nth-of-type(%v)", prefix, x)
+	selectors[len(selectors)-1] = prefix
+	return fmt.Sprintf("%v:nth-of-type(%v)", strings.Join(selectors, " "), x)
 }
 
 func fillValue(ctx context.Context, cssSelector string, value reflect.Value, selected []string, opt UnmarshalOption) error {
@@ -62,10 +63,9 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
 		for i := 0; i < len(selected); i++ {
 			// TODO nth-child, nth-last-child, nth-last-of-type があったらエラーにする / first-child, last-child があったら nth-of-typeは付けない
-			sel := resolveNthOfType(cssSelector, i)
 			err := fillValue(ctx, resolveNthOfType(cssSelector, i), rv.Index(i), []string{selected[i]}, opt)
 			if err != nil {
-				return fmt.Errorf("#%d: %w (sel:%#v)", i, err, sel)
+				return fmt.Errorf("#%d: %w", i, err)
 			}
 		}
 		value.Set(rv)

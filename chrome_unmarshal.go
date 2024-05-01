@@ -14,6 +14,7 @@ import (
 )
 
 func parseNthOfTypeParam(cssSelector string) (string, int, int) {
+	// TODO nの係数にマイナスを付けてきたときの対応 (1 ～ bの範囲で % abs(a) == 0 ならOK)
 	regex := regexp.MustCompile(`(.*):nth-of-type\((odd|even|(?:(\d+)n)?\+?(\d+)?)\)$`)
 	matched := regex.FindStringSubmatch(cssSelector)
 	if len(matched) == 0 {
@@ -60,9 +61,11 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 	if value.Kind() == reflect.Slice {
 		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
 		for i := 0; i < len(selected); i++ {
+			// TODO nth-child, nth-last-child, nth-last-of-type があったらエラーにする / first-child, last-child があったら nth-of-typeは付けない
+			sel := resolveNthOfType(cssSelector, i)
 			err := fillValue(ctx, resolveNthOfType(cssSelector, i), rv.Index(i), []string{selected[i]}, opt)
 			if err != nil {
-				return fmt.Errorf("#%d: %v", i, err)
+				return fmt.Errorf("#%d: %w (sel:%#v)", i, err, sel)
 			}
 		}
 		value.Set(rv)

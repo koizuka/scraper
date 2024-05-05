@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -67,7 +68,11 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 	// configure to download behavior
 	err = chromedp.Run(ctxt,
 		chromedp.ActionFunc(func(ctxt context.Context) error {
-			err := browser.SetDownloadBehavior("allow").WithDownloadPath(downloadPath).Do(ctxt)
+			err := (&browser.SetDownloadBehaviorParams{
+				Behavior:      "allow",
+				DownloadPath:  downloadPath,
+				EventsEnabled: true,
+			}).Do(ctxt)
 			if err != nil {
 				return err
 			}
@@ -111,6 +116,72 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 		}
 		return nil
 	})
+}
+
+func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp.Action) chromedp.ActionFunc {
+	return func(ctxt context.Context) error {
+		if filename == nil {
+			return fmt.Errorf("filename is nil")
+		}
+		download := make(chan string)
+
+		downloadCtx, cancel := context.WithTimeout(ctxt, 10*time.Second)
+		defer cancel()
+
+		suggestedFilename := ""
+		chromedp.ListenTarget(downloadCtx, func(ev interface{}) {
+			if begin, ok := ev.(*browser.EventDownloadWillBegin); ok {
+				suggestedFilename = path.Join(session.DownloadPath, begin.SuggestedFilename)
+			} else if progress, ok := ev.(*browser.EventDownloadProgress); ok {
+				switch progress.State {
+				case browser.DownloadProgressStateCompleted:
+					download <- suggestedFilename
+
+				case browser.DownloadProgressStateCanceled:
+					session.Printf("**** DOWNLOAD CANCELED\n")
+					download <- ""
+				}
+			}
+			if ev, ok := ev.(*network.EventResponseReceived); ok {
+				if ev.Response.URL == *filename {
+					session.Printf("**** DOWNLOAD %v\n", *filename)
+				}
+			}
+		})
+		err := chromedp.Run(ctxt, actions...)
+		if err != nil && !strings.Contains(err.Error(), "net::ERR_ABORTED") {
+			return err
+		}
+
+		select {
+		case <-downloadCtx.Done():
+			return downloadCtx.Err()
+		case downloaded := <-download:
+			if downloaded == "" {
+				return fmt.Errorf("download canceled")
+			}
+			*filename = downloaded
+			session.Printf("**** DOWNLOADED: %v\n", *filename)
+			return nil
+		}
+	}
+}
+
+func (session *ChromeSession) SaveFile(filename string) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		session.invokeCount++
+		fn := session.getHtmlFilename()
+		body, err := os.ReadFile(filename)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile(fn, body, 0644)
+		if err != nil {
+			return err
+		}
+		session.Printf("**** SAVE to %v (%v bytes)\n", fn, len(body))
+		return nil
+	}
 }
 
 func (session *ChromeSession) actionChrome(action chromedp.Action) (*network.Response, error) {

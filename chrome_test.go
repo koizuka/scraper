@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"fmt"
+	"github.com/chromedp/chromedp"
 	"github.com/google/go-cmp/cmp"
 	"net/http"
 	"net/http/httptest"
@@ -112,4 +113,58 @@ func TestSession_RunNavigate(t *testing.T) {
 			return
 		}
 	})
+}
+
+func TestChromeSession_DownloadFile(t *testing.T) {
+	// create a test server to serve file download request
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Disposition", "attachment; filename=example.txt")
+		_, _ = fmt.Fprint(w, "Hello World.")
+	}))
+
+	dir, err := os.MkdirTemp(".", "chrome_test*")
+	if err != nil {
+		t.Error(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	sessionName := "chrome_test"
+	err = os.Mkdir(path.Join(dir, sessionName), 0744)
+	if err != nil {
+		t.Error(err)
+	}
+
+	logger := BufferedLogger{}
+	session := NewSession(sessionName, &logger)
+
+	chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 30 * time.Second})
+	defer cancelFunc()
+	if err != nil {
+		t.Errorf("NewChromeOpt() error: %v", err)
+		return
+	}
+
+	// download file
+	var downloadedFilename string
+	err = chromedp.Run(chromeSession.Ctx,
+		chromeSession.DownloadFile(&downloadedFilename,
+			chromedp.Navigate(ts.URL),
+		),
+	)
+	if err != nil {
+		t.Errorf("DownloadFile() error: %v", err)
+		return
+	}
+
+	rawFile, err := os.ReadFile(downloadedFilename)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	file := string(rawFile)
+	if diff := cmp.Diff("Hello World.", file); diff != "" {
+		t.Errorf("(-shouldBe +got)\n%v", diff)
+		return
+	}
 }

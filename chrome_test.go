@@ -3,7 +3,6 @@ package scraper
 import (
 	"fmt"
 	"github.com/google/go-cmp/cmp"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,11 +20,11 @@ func TestSession_RunNavigate(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		dir, err := ioutil.TempDir(".", "chrome_test*")
+		dir, err := os.MkdirTemp(".", "chrome_test*")
 		if err != nil {
 			t.Error(err)
 		}
-		defer os.RemoveAll(dir)
+		defer func() { _ = os.RemoveAll(dir) }()
 
 		sessionName := "chrome_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -50,7 +49,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		}
 
 		filename := session.getHtmlFilename()
-		rawHtml, err := ioutil.ReadFile(filename)
+		rawHtml, err := os.ReadFile(filename)
 		if err != nil {
 			t.Error(err)
 			return
@@ -70,11 +69,11 @@ func TestSession_RunNavigate(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		dir, err := ioutil.TempDir(".", "chrome_test*")
+		dir, err := os.MkdirTemp(".", "chrome_test*")
 		if err != nil {
 			t.Error(err)
 		}
-		defer os.RemoveAll(dir)
+		defer func() { _ = os.RemoveAll(dir) }()
 
 		sessionName := "chrome_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)

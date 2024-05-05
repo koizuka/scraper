@@ -5,7 +5,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	cookiejar "github.com/orirawlings/persistent-cookiejar"
 	"golang.org/x/text/encoding"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -172,7 +172,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 		contentType = response.Header.Get("content-type")
 
-		body, err = ioutil.ReadAll(response.Body)
+		body, err = io.ReadAll(response.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -180,12 +180,12 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		if session.SaveToFile {
 			// save to file
 			session.Printf("**** SAVE to %v (%v bytes)\n", filename, len(body))
-			err = ioutil.WriteFile(filename, body, os.FileMode(0644))
+			err = os.WriteFile(filename, body, os.FileMode(0644))
 			if err != nil {
 				return nil, err
 			}
 
-			err = ioutil.WriteFile(contentTypeFilename, []byte(contentType), os.FileMode(0644))
+			err = os.WriteFile(contentTypeFilename, []byte(contentType), os.FileMode(0644))
 			if err != nil {
 				return nil, err
 			}
@@ -194,12 +194,12 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		// load from file
 		session.Printf("**** LOAD from %v\n", filename)
 		var err error
-		body, err = ioutil.ReadFile(filename)
+		body, err = os.ReadFile(filename)
 		if err != nil {
 			return nil, RetryAndRecordError{filename}
 		}
 
-		ct, err := ioutil.ReadFile(contentTypeFilename)
+		ct, err := os.ReadFile(contentTypeFilename)
 		if err != nil {
 			return nil, RetryAndRecordError{filename}
 		}

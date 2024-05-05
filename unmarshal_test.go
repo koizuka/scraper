@@ -465,7 +465,7 @@ func TestUnmarshallUnexportedField(t *testing.T) {
 		value.test = ""
 		shouldBe := UnmarshalFieldError{"test", UnmarshalUnexportedFieldError{}}
 		err = Unmarshal(&value, page.Find("div"), UnmarshalOption{})
-		if err != shouldBe {
+		if !errors.Is(shouldBe, err) {
 			t.Errorf(fmt.Sprintf("'%v' != '%v'", err, shouldBe))
 		}
 	}

@@ -36,11 +36,12 @@ type UnmarshalFieldError struct {
 func (err UnmarshalFieldError) Error() string {
 	e := err.Err
 	fields := []string{err.Field}
-	next, ok := e.(UnmarshalFieldError)
+	var next UnmarshalFieldError
+	ok := errors.As(e, &next)
 	for ok {
 		fields = append(fields, next.Field)
 		e = next.Err
-		next, ok = e.(UnmarshalFieldError)
+		ok = errors.As(e, &next)
 	}
 	return fmt.Sprintf("%v: %v", strings.Join(fields, "."), e)
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -97,7 +96,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 		session.invokeCount++
 		fn := session.getHtmlFilename()
 		body := []byte(html)
-		err = ioutil.WriteFile(fn, body, 0644)
+		err = os.WriteFile(fn, body, 0644)
 		if err != nil {
 			return err
 		}
@@ -127,7 +126,7 @@ func (session *ChromeSession) actionChrome(action chromedp.Action) (*network.Res
 	responseFilename := filename + ".response.json"
 
 	jsonData, err := json.Marshal(resp)
-	err = ioutil.WriteFile(responseFilename, jsonData, 0644)
+	err = os.WriteFile(responseFilename, jsonData, 0644)
 	if err != nil {
 		return nil, err
 	}

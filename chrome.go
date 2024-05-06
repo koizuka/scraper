@@ -67,18 +67,10 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 
 	// configure to download behavior
 	err = chromedp.Run(ctxt,
-		chromedp.ActionFunc(func(ctxt context.Context) error {
-			err := (&browser.SetDownloadBehaviorParams{
-				Behavior:      "allow",
-				DownloadPath:  downloadPath,
-				EventsEnabled: true,
-			}).Do(ctxt)
-			if err != nil {
-				return err
-			}
-			return nil
-		}))
-
+		browser.SetDownloadBehavior("allow").
+			WithDownloadPath(downloadPath).
+			WithEventsEnabled(true),
+	)
 	if err != nil {
 		return chromeSession, cancelFunc, err
 	}
@@ -125,26 +117,22 @@ func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp
 		}
 		download := make(chan string)
 
-		downloadCtx, cancel := context.WithTimeout(ctxt, 10*time.Second)
+		downloadCtx, cancel := context.WithTimeout(ctxt, 5*time.Second)
 		defer cancel()
+
+		startTime := time.Now()
 
 		suggestedFilename := ""
 		chromedp.ListenTarget(downloadCtx, func(ev interface{}) {
-			if begin, ok := ev.(*browser.EventDownloadWillBegin); ok {
-				suggestedFilename = path.Join(session.DownloadPath, begin.SuggestedFilename)
-			} else if progress, ok := ev.(*browser.EventDownloadProgress); ok {
-				switch progress.State {
+			switch ev := ev.(type) {
+			case *browser.EventDownloadWillBegin:
+				suggestedFilename = path.Join(session.DownloadPath, ev.SuggestedFilename)
+			case *browser.EventDownloadProgress:
+				switch ev.State {
 				case browser.DownloadProgressStateCompleted:
 					download <- suggestedFilename
-
 				case browser.DownloadProgressStateCanceled:
-					session.Printf("**** DOWNLOAD CANCELED\n")
 					download <- ""
-				}
-			}
-			if ev, ok := ev.(*network.EventResponseReceived); ok {
-				if ev.Response.URL == *filename {
-					session.Printf("**** DOWNLOAD %v\n", *filename)
 				}
 			}
 		})
@@ -155,7 +143,24 @@ func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp
 
 		select {
 		case <-downloadCtx.Done():
+			// browser.DownloadProgressStateCompleted が来なかった場合、新しいファイルがあったらそれを返す
+			files, err := os.ReadDir(session.DownloadPath)
+			if err != nil {
+				return err
+			}
+			for _, file := range files {
+				info, err := file.Info()
+				if err != nil {
+					return err
+				}
+				if !info.ModTime().Before(startTime) {
+					*filename = path.Join(session.DownloadPath, file.Name())
+					session.Printf("**** DOWNLOADED: %v\n", *filename)
+					return nil
+				}
+			}
 			return downloadCtx.Err()
+
 		case downloaded := <-download:
 			if downloaded == "" {
 				return fmt.Errorf("download canceled")
@@ -167,11 +172,23 @@ func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp
 	}
 }
 
-func (session *ChromeSession) SaveFile(filename string) chromedp.ActionFunc {
+/**
+ * SaveFile saves file to filename
+ * filename: DownloadFile の結果を chromedp.Run で続ける場合、ポインタにしないと実行前の値が渡ってしまうため、ポインタにする
+ */
+func (session *ChromeSession) SaveFile(filename *string) chromedp.ActionFunc {
 	return func(ctx context.Context) error {
 		session.invokeCount++
+		if filename == nil {
+			return fmt.Errorf("filename is nil")
+		}
+
 		fn := session.getHtmlFilename()
-		body, err := os.ReadFile(filename)
+
+		// change extension with filename
+		fn = strings.TrimSuffix(fn, filepath.Ext(fn)) + filepath.Ext(*filename)
+
+		body, err := os.ReadFile(*filename)
 		if err != nil {
 			return err
 		}
@@ -179,7 +196,7 @@ func (session *ChromeSession) SaveFile(filename string) chromedp.ActionFunc {
 		if err != nil {
 			return err
 		}
-		session.Printf("**** SAVE to %v (%v bytes)\n", fn, len(body))
+		session.Printf("**** SAVE %v to %v (%v bytes)\n", *filename, fn, len(body))
 		return nil
 	}
 }

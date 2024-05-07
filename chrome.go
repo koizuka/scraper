@@ -110,14 +110,45 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 	})
 }
 
-func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp.Action) chromedp.ActionFunc {
+type DownloadFileOptions struct {
+	Timeout time.Duration
+	Glob    string
+}
+
+type DownloadedFileNameNotSatisfiedError struct {
+	DownloadedFilename string
+	Glob               string
+}
+
+func (e *DownloadedFileNameNotSatisfiedError) Error() string {
+	return fmt.Sprintf("downloaded filename %v is not match to %v", e.DownloadedFilename, e.Glob)
+}
+
+func (session *ChromeSession) DownloadFile(filename *string, options DownloadFileOptions, actions ...chromedp.Action) chromedp.ActionFunc {
 	return func(ctxt context.Context) error {
 		if filename == nil {
 			return fmt.Errorf("filename is nil")
 		}
 		download := make(chan string)
 
-		downloadCtx, cancel := context.WithTimeout(ctxt, 5*time.Second)
+		if options.Timeout == 0 {
+			options.Timeout = 5 * time.Second
+		}
+		if options.Glob == "" {
+			options.Glob = "*"
+		} else {
+			// if options.Glob has path separator, it's invalid
+			if dir, _ := path.Split(options.Glob); dir != "" {
+				return fmt.Errorf("invalid glob pattern(contains path component): %v", options.Glob)
+			}
+			// validate options.Glob
+			_, err := filepath.Match(options.Glob, "")
+			if err != nil {
+				return fmt.Errorf("invalid glob pattern(%w): %v", err, options.Glob)
+			}
+		}
+
+		downloadCtx, cancel := context.WithTimeout(ctxt, options.Timeout)
 		defer cancel()
 
 		startTime := time.Now()
@@ -148,16 +179,28 @@ func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp
 			if err != nil {
 				return err
 			}
+			var matchErr error
+			latestTime := time.Time{}
 			for _, file := range files {
 				info, err := file.Info()
 				if err != nil {
 					return err
 				}
 				if !info.ModTime().Before(startTime) {
-					*filename = path.Join(session.DownloadPath, file.Name())
-					session.Printf("**** DOWNLOADED: %v\n", *filename)
-					return nil
+					if match, _ := filepath.Match(options.Glob, file.Name()); match {
+						*filename = path.Join(session.DownloadPath, file.Name())
+						session.Printf("**** DOWNLOADED: %v\n", *filename)
+						return nil
+					} else {
+						if info.ModTime().After(latestTime) {
+							latestTime = info.ModTime()
+							matchErr = &DownloadedFileNameNotSatisfiedError{DownloadedFilename: file.Name(), Glob: options.Glob}
+						}
+					}
 				}
+			}
+			if matchErr != nil {
+				return matchErr
 			}
 			return downloadCtx.Err()
 
@@ -165,6 +208,11 @@ func (session *ChromeSession) DownloadFile(filename *string, actions ...chromedp
 			if downloaded == "" {
 				return fmt.Errorf("download canceled")
 			}
+			// if downloaded filename is not match to options.Glob pattern, error
+			if match, _ := filepath.Match(options.Glob, filepath.Base(downloaded)); !match {
+				return &DownloadedFileNameNotSatisfiedError{DownloadedFilename: downloaded, Glob: options.Glob}
+			}
+
 			*filename = downloaded
 			session.Printf("**** DOWNLOADED: %v\n", *filename)
 			return nil

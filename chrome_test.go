@@ -137,34 +137,67 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 	logger := BufferedLogger{}
 	session := NewSession(sessionName, &logger)
 
-	chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 30 * time.Second})
-	defer cancelFunc()
-	if err != nil {
-		t.Errorf("NewChromeOpt() error: %v", err)
-		return
+	tests := []struct {
+		name    string
+		opt     DownloadFileOptions
+		wantErr bool
+	}{
+		{
+			name:    "no glob",
+			opt:     DownloadFileOptions{},
+			wantErr: false,
+		},
+		{
+			name:    "invalid glob",
+			opt:     DownloadFileOptions{Glob: "/"},
+			wantErr: true,
+		},
+		{
+			name:    "valid glob",
+			opt:     DownloadFileOptions{Glob: "*"},
+			wantErr: false,
+		},
+		{
+			name:    "valid but not matched glob",
+			opt:     DownloadFileOptions{Glob: "*.html"},
+			wantErr: true,
+		},
 	}
 
-	// download file
-	var downloadedFilename string
-	err = chromedp.Run(chromeSession.Ctx,
-		chromeSession.DownloadFile(&downloadedFilename,
-			chromedp.Navigate(ts.URL),
-		),
-	)
-	if err != nil {
-		t.Errorf("DownloadFile() error: %v", err)
-		return
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{Headless: true, Timeout: 30 * time.Second})
+			defer cancelFunc()
+			if err != nil {
+				t.Errorf("NewChromeOpt() error: %v", err)
+				return
+			}
 
-	rawFile, err := os.ReadFile(downloadedFilename)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+			// download file
+			var downloadedFilename string
+			err = chromedp.Run(chromeSession.Ctx,
+				chromeSession.DownloadFile(&downloadedFilename, tt.opt,
+					chromedp.Navigate(ts.URL),
+				),
+			)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DownloadFile() error: %v", err)
+				return
+			}
 
-	file := string(rawFile)
-	if diff := cmp.Diff("Hello World.", file); diff != "" {
-		t.Errorf("(-shouldBe +got)\n%v", diff)
-		return
+			if !tt.wantErr {
+				rawFile, err := os.ReadFile(downloadedFilename)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				file := string(rawFile)
+				if diff := cmp.Diff("Hello World.", file); diff != "" {
+					t.Errorf("(-shouldBe +got)\n%v", diff)
+					return
+				}
+			}
+		})
 	}
 }

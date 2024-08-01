@@ -8,7 +8,7 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -46,7 +46,7 @@ func encode(s string, encoding encoding.Encoding) ([]byte, error) {
 	if encoding == nil {
 		return []byte(s), nil
 	}
-	return ioutil.ReadAll(transform.NewReader(strings.NewReader(s), encoding.NewEncoder()))
+	return io.ReadAll(transform.NewReader(strings.NewReader(s), encoding.NewEncoder()))
 }
 
 func TestGetCharsetFromHead(t *testing.T) {

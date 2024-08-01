@@ -35,6 +35,7 @@ type Session struct {
 	ShowFormPosting    bool // print posting form data, with Logger
 	Log                Logger
 	jar                *cookiejar.Jar
+	BodyFilter         func(resp *Response, body []byte) ([]byte, error)
 }
 
 type RequestError struct {
@@ -234,7 +235,7 @@ func (session *Session) GetPageMaxRedirect(getUrl string, maxRedirect int) (*Pag
 	if err != nil {
 		return nil, err
 	}
-	page, err := resp.Page()
+	page, err := resp.PageOpt(PageOption{BodyFilter: session.BodyFilter})
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +322,7 @@ func (session *Session) Frame(page *Page, frameSelector string) (*Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	return resp.Page()
+	return resp.PageOpt(PageOption{BodyFilter: session.BodyFilter})
 }
 
 type FollowAnchorTextOption struct {

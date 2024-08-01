@@ -47,8 +47,12 @@ func (response *Response) CsvReader() *csv.Reader {
 	return csv.NewReader(utfbom.SkipOnly(bytes.NewBuffer(body)))
 }
 
-// Page parses raw response to DOM tree and returns a Page object.
-func (response *Response) Page() (*Page, error) {
+type PageOption struct {
+	BodyFilter func(resp *Response, body []byte) ([]byte, error)
+}
+
+// PageOpt parses raw response to DOM tree and returns a Page object.
+func (response *Response) PageOpt(option PageOption) (*Page, error) {
 	if response.Encoding == nil {
 		doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(response.RawBody))
 		if err != nil {
@@ -63,6 +67,12 @@ func (response *Response) Page() (*Page, error) {
 	body, err := response.Body()
 	if err != nil {
 		return nil, err
+	}
+	if option.BodyFilter != nil {
+		body, err = option.BodyFilter(response, body)
+		if err != nil {
+			return nil, err
+		}
 	}
 	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(body))
 	if err != nil {
@@ -87,6 +97,10 @@ func (response *Response) Page() (*Page, error) {
 	response.Logger.Printf("* %v\n", doc.Find("title").Text())
 
 	return &Page{doc, baseUrl, response.Logger}, err
+}
+
+func (response *Response) Page() (*Page, error) {
+	return response.PageOpt(PageOption{})
 }
 
 func getCharsetFromHead(document *goquery.Document) string {

@@ -10,6 +10,7 @@ import (
 	"golang.org/x/text/transform"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -267,6 +268,61 @@ func Test_charsetFromContentType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := charsetFromContentType(tt.args.contentType); got != tt.want {
 				t.Errorf("charsetFromContentType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResponse_PageOpt(t *testing.T) {
+	const body1 = "<html><body><p>日本語</p></body></html>"
+	const text1 = "日本語"
+	const body2 = "<html><body><p>English</p></body></html>"
+	const text2 = "English"
+
+	type args struct {
+		option PageOption
+	}
+	tests := []struct {
+		name    string
+		args    args
+		body    string
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "plain",
+			args: args{
+				option: PageOption{},
+			},
+			body: body1,
+			want: text1,
+		},
+		{
+			name: "filter",
+			args: args{
+				option: PageOption{
+					BodyFilter: func(resp *Response, body []byte) ([]byte, error) {
+						return []byte(body2), nil
+					},
+				},
+			},
+			body: body1,
+			want: text2,
+		},
+	}
+	const url = "http://localhost/"
+	const contentType = "text/html"
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response, err := createHtmlResponse(tt.body, nil, nil, url, contentType)
+
+			got, err := response.PageOpt(tt.args.option)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PageOpt() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got.Text(), tt.want) {
+				t.Errorf("PageOpt() got = %v, want %v", got.Text(), tt.want)
 			}
 		})
 	}

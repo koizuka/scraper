@@ -21,8 +21,9 @@ type ChromeSession struct {
 }
 
 type NewChromeOptions struct {
-	Headless bool
-	Timeout  time.Duration
+	Headless          bool
+	Timeout           time.Duration
+	ExtraAllocOptions []chromedp.ExecAllocatorOption
 }
 
 func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *ChromeSession, cancelFunc context.CancelFunc, err error) {
@@ -39,6 +40,11 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 			chromedp.Headless,
 			chromedp.DisableGPU,
 		)
+	}
+
+	// Add any extra allocator options
+	if len(options.ExtraAllocOptions) > 0 {
+		allocOptions = append(allocOptions, options.ExtraAllocOptions...)
 	}
 
 	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))

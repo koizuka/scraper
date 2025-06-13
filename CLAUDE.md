@@ -119,3 +119,7 @@ err := scraper.Unmarshal(&items, page.Find(".item"), scraper.UnmarshalOption{})
 - `github.com/chromedp/chromedp` - Chrome DevTools Protocol client
 - `github.com/orirawlings/persistent-cookiejar` - Persistent cookie storage
 - `golang.org/x/text` - Text encoding conversion
+
+## Development Guidelines
+
+- git commit する前には go fmt を実行してください

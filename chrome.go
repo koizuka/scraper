@@ -40,6 +40,12 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 			chromedp.DisableGPU,
 		)
 	}
+	
+	// Add --no-sandbox flag for CI environments to avoid sandbox restrictions
+	// This is needed for Ubuntu 23.10+ with AppArmor restrictions in CI
+	if os.Getenv("CI") == "true" {
+		allocOptions = append(allocOptions, chromedp.NoSandbox)
+	}
 
 	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))
 	if err != nil {

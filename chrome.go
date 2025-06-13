@@ -14,6 +14,38 @@ import (
 	"time"
 )
 
+// isRunningInCI checks if the current environment is a CI system
+// by checking multiple environment variables that different CI systems set
+func isRunningInCI() bool {
+	// GitHub Actions sets GITHUB_ACTIONS=true
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		return true
+	}
+	
+	// Standard CI environment variable (set by most CI systems)
+	if ci := os.Getenv("CI"); ci == "true" || ci == "1" {
+		return true
+	}
+	
+	// Additional CI system checks for broader compatibility
+	ciSystems := []string{
+		"GITLAB_CI",    // GitLab CI
+		"TRAVIS",       // Travis CI
+		"CIRCLECI",     // Circle CI
+		"APPVEYOR",     // AppVeyor
+		"JENKINS_URL",  // Jenkins
+		"BUILDKITE",    // Buildkite
+	}
+	
+	for _, env := range ciSystems {
+		if os.Getenv(env) != "" {
+			return true
+		}
+	}
+	
+	return false
+}
+
 type ChromeSession struct {
 	*Session
 	Ctx          context.Context
@@ -43,7 +75,8 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 	
 	// Add --no-sandbox flag for CI environments to avoid sandbox restrictions
 	// This is needed for Ubuntu 23.10+ with AppArmor restrictions in CI
-	if os.Getenv("CI") == "true" {
+	// Check multiple CI environment variables for better compatibility
+	if isRunningInCI() {
 		allocOptions = append(allocOptions, chromedp.NoSandbox)
 	}
 

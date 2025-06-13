@@ -64,14 +64,18 @@ func TestChromeUnmarshal(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// create context with CI-aware Chrome options
+	// create context with CI-aware Chrome options using test helper
+	testOptions := NewTestChromeOptions(true)
 	allocOptions := []chromedp.ExecAllocatorOption{
-		chromedp.Headless,
-		chromedp.DisableGPU,
+		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
 	}
-
-	// Add CI-compatible options
-	allocOptions = append(allocOptions, getCICompatibleChromeOptions()...)
+	if testOptions.Headless {
+		allocOptions = append(allocOptions,
+			chromedp.Headless,
+			chromedp.DisableGPU,
+		)
+	}
+	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
 	defer allocCancel()

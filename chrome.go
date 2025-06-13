@@ -21,8 +21,9 @@ type ChromeSession struct {
 }
 
 type NewChromeOptions struct {
-	Headless bool
-	Timeout  time.Duration
+	Headless           bool
+	Timeout            time.Duration
+	ExtraAllocOptions  []chromedp.ExecAllocatorOption
 }
 
 func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *ChromeSession, cancelFunc context.CancelFunc, err error) {
@@ -41,17 +42,9 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		)
 	}
 	
-	// Add Chrome options for CI environment
-	if os.Getenv("CI") == "true" {
-		allocOptions = append(allocOptions,
-			chromedp.NoSandbox,
-			chromedp.DisableGPU,
-			chromedp.NoFirstRun,
-			chromedp.Flag("disable-dev-shm-usage", true),
-			chromedp.Flag("disable-extensions", true),
-			chromedp.Flag("disable-default-apps", true),
-			chromedp.Flag("disable-web-security", true),
-		)
+	// Add any extra allocator options
+	if len(options.ExtraAllocOptions) > 0 {
+		allocOptions = append(allocOptions, options.ExtraAllocOptions...)
 	}
 
 	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))

@@ -7,7 +7,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -71,17 +70,8 @@ func TestChromeUnmarshal(t *testing.T) {
 		chromedp.DisableGPU,
 	}
 	
-	// Add Chrome options for CI environment
-	if os.Getenv("CI") == "true" {
-		allocOptions = append(allocOptions,
-			chromedp.NoSandbox,
-			chromedp.NoFirstRun,
-			chromedp.Flag("disable-dev-shm-usage", true),
-			chromedp.Flag("disable-extensions", true),
-			chromedp.Flag("disable-default-apps", true),
-			chromedp.Flag("disable-web-security", true),
-		)
-	}
+	// Add CI-compatible options
+	allocOptions = append(allocOptions, getCICompatibleChromeOptions()...)
 	
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
 	defer allocCancel()

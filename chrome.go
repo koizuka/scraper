@@ -41,9 +41,17 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		)
 	}
 	
-	// Add NoSandbox option when running in CI environment
+	// Add Chrome options for CI environment
 	if os.Getenv("CI") == "true" {
-		allocOptions = append(allocOptions, chromedp.NoSandbox)
+		allocOptions = append(allocOptions,
+			chromedp.NoSandbox,
+			chromedp.DisableGPU,
+			chromedp.NoFirstRun,
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("disable-extensions", true),
+			chromedp.Flag("disable-default-apps", true),
+			chromedp.Flag("disable-web-security", true),
+		)
 	}
 
 	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))

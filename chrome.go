@@ -44,10 +44,7 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 
 	// Add any extra allocator options
 	if len(options.ExtraAllocOptions) > 0 {
-		println("DEBUG: Adding", len(options.ExtraAllocOptions), "extra allocator options")
 		allocOptions = append(allocOptions, options.ExtraAllocOptions...)
-	} else {
-		println("DEBUG: No extra allocator options to add")
 	}
 
 	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))

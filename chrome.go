@@ -40,6 +40,11 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 			chromedp.DisableGPU,
 		)
 	}
+	
+	// Add NoSandbox option when running in CI environment
+	if os.Getenv("CI") == "true" {
+		allocOptions = append(allocOptions, chromedp.NoSandbox)
+	}
 
 	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))
 	if err != nil {

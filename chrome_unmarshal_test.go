@@ -69,13 +69,13 @@ func TestChromeUnmarshal(t *testing.T) {
 		chromedp.Headless,
 		chromedp.DisableGPU,
 	}
-	
+
 	// Add CI-compatible options
 	allocOptions = append(allocOptions, getCICompatibleChromeOptions()...)
-	
+
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
 	defer allocCancel()
-	
+
 	ctx, cancel := chromedp.NewContext(allocCtx)
 	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

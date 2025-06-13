@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-
 func TestSession_RunNavigate(t *testing.T) {
 	t.Run("got html", func(t *testing.T) {
 		// create a test server to serve the page
@@ -39,8 +38,8 @@ func TestSession_RunNavigate(t *testing.T) {
 		session.FilePrefix = dir + "/"
 
 		chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{
-			Headless: true, 
-			Timeout: 30 * time.Second,
+			Headless:          true,
+			Timeout:           30 * time.Second,
 			ExtraAllocOptions: getCICompatibleChromeOptions(),
 		})
 		defer cancelFunc()
@@ -172,10 +171,10 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			chromeSession, cancelFunc, err := session.NewChromeOpt(NewChromeOptions{
-			Headless: true, 
-			Timeout: 30 * time.Second,
-			ExtraAllocOptions: getCICompatibleChromeOptions(),
-		})
+				Headless:          true,
+				Timeout:           30 * time.Second,
+				ExtraAllocOptions: getCICompatibleChromeOptions(),
+			})
 			defer cancelFunc()
 			if err != nil {
 				t.Errorf("NewChromeOpt() error: %v", err)

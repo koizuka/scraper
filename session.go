@@ -36,6 +36,7 @@ type Session struct {
 	Log                Logger
 	jar                *cookiejar.Jar
 	BodyFilter         func(resp *Response, body []byte) ([]byte, error)
+	debugStep          string // debug step label for logging
 }
 
 type RequestError struct {
@@ -99,6 +100,24 @@ func (session *Session) LoadCookie() error {
 // must call LoadCookie() before call SaveCookie().
 func (session *Session) SaveCookie() error {
 	return session.jar.Save()
+}
+
+// SetDebugStep sets the debug step label for logging
+func (session *Session) SetDebugStep(step string) {
+	session.debugStep = step
+}
+
+// ClearDebugStep clears the debug step label
+func (session *Session) ClearDebugStep() {
+	session.debugStep = ""
+}
+
+// getDebugPrefix returns the debug prefix for logging
+func (session *Session) getDebugPrefix() string {
+	if session.debugStep == "" {
+		return "****"
+	}
+	return fmt.Sprintf("**** [%s]", session.debugStep)
 }
 
 func (session *Session) getDirectory() string {
@@ -180,7 +199,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 		if session.SaveToFile {
 			// save to file
-			session.Printf("**** SAVE to %v (%v bytes)\n", filename, len(body))
+			session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
 			err = os.WriteFile(filename, body, os.FileMode(0644))
 			if err != nil {
 				return nil, err
@@ -193,7 +212,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		}
 	} else {
 		// load from file
-		session.Printf("**** LOAD from %v\n", filename)
+		session.Printf("%s LOAD from %v\n", session.getDebugPrefix(), filename)
 		var err error
 		body, err = os.ReadFile(filename)
 		if err != nil {

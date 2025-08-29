@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 )
@@ -200,4 +201,93 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestChromeSession_DebugStep(t *testing.T) {
+	t.Run("debug step in Chrome SAVE log", func(t *testing.T) {
+		// Create a test server
+		testContent := "<html><body>Chrome Test Content</body></html>"
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, testContent)
+		}))
+		defer ts.Close()
+
+		// Create temp directory
+		dir, err := os.MkdirTemp(".", "chrome_debug_test*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(dir)
+
+		sessionName := "chrome_debug_test_session"
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		logger := &BufferedLogger{}
+		session := NewSession(sessionName, logger)
+		session.FilePrefix = dir + "/"
+
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		// Test with debug step
+		debugStep := "Chrome ナビゲート"
+		chromeSession.SetDebugStep(debugStep)
+
+		_, err = chromeSession.RunNavigate(ts.URL)
+		if err != nil {
+			t.Fatalf("RunNavigate() error: %v", err)
+		}
+
+		logOutput := logger.buffer.String()
+		expectedLog := fmt.Sprintf("**** [%s] SAVE to", debugStep)
+		if !strings.Contains(logOutput, expectedLog) {
+			t.Errorf("Expected debug step in Chrome SAVE log %q, got: %s", expectedLog, logOutput)
+		}
+	})
+
+	t.Run("debug step inheritance from Session", func(t *testing.T) {
+		// Create temp directory
+		dir, err := os.MkdirTemp(".", "chrome_debug_inherit_test*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(dir)
+
+		sessionName := "chrome_debug_inherit_test_session"
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		logger := &BufferedLogger{}
+		session := NewSession(sessionName, logger)
+		session.FilePrefix = dir + "/"
+
+		// Set debug step on Session
+		debugStep := "継承テスト"
+		session.SetDebugStep(debugStep)
+
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		// Verify ChromeSession inherits the debug step from Session
+		if chromeSession.debugStep != debugStep {
+			t.Errorf("Expected ChromeSession to inherit debug step %q, got %q", debugStep, chromeSession.debugStep)
+		}
+
+		// Test clearing debug step from ChromeSession affects the embedded Session
+		chromeSession.ClearDebugStep()
+		if session.debugStep != "" {
+			t.Errorf("Expected Session debug step to be cleared via ChromeSession, got %q", session.debugStep)
+		}
+	})
 }

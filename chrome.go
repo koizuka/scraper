@@ -106,7 +106,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 		if filename != nil {
 			*filename = fn
 		}
-		session.Printf("**** SAVE to %v (%v bytes)\n", fn, len(body))
+		session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
 		var title string
 		err = chromedp.Title(&title).Do(ctxt)
 		if err == nil {
@@ -195,7 +195,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 				if !info.ModTime().Before(startTime) {
 					if match, _ := filepath.Match(options.Glob, file.Name()); match {
 						*filename = path.Join(session.DownloadPath, file.Name())
-						session.Printf("**** DOWNLOADED: %v\n", *filename)
+						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
 						return nil
 					} else {
 						if info.ModTime().After(latestTime) {
@@ -220,7 +220,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 			}
 
 			*filename = downloaded
-			session.Printf("**** DOWNLOADED: %v\n", *filename)
+			session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
 			return nil
 		}
 	}
@@ -250,7 +250,7 @@ func (session *ChromeSession) SaveFile(filename *string) chromedp.ActionFunc {
 		if err != nil {
 			return err
 		}
-		session.Printf("**** SAVE %v to %v (%v bytes)\n", *filename, fn, len(body))
+		session.Printf("%s SAVE %v to %v (%v bytes)\n", session.getDebugPrefix(), *filename, fn, len(body))
 		return nil
 	}
 }

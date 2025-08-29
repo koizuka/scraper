@@ -105,10 +105,14 @@ func (session *Session) SaveCookie() error {
 // SetDebugStep sets the debug step label for logging
 func (session *Session) SetDebugStep(step string) {
 	session.debugStep = step
+	session.Printf("**** [%s] START\n", step)
 }
 
 // ClearDebugStep clears the debug step label
 func (session *Session) ClearDebugStep() {
+	if session.debugStep != "" {
+		session.Printf("**** [%s] END\n", session.debugStep)
+	}
 	session.debugStep = ""
 }
 

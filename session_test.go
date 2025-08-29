@@ -160,4 +160,52 @@ func TestSession_DebugStep(t *testing.T) {
 			t.Errorf("Expected debug step in LOAD log %q, got: %s", expectedLog, logOutput)
 		}
 	})
+
+	t.Run("SetDebugStep logs START message", func(t *testing.T) {
+		logger := &BufferedLogger{}
+		session := NewSession("test_session", logger)
+
+		testStep := "テスト処理"
+		session.SetDebugStep(testStep)
+
+		logOutput := logger.buffer.String()
+		expectedLog := fmt.Sprintf("**** [%s] START\n", testStep)
+		if logOutput != expectedLog {
+			t.Errorf("Expected log %q, got %q", expectedLog, logOutput)
+		}
+	})
+
+	t.Run("ClearDebugStep logs END message", func(t *testing.T) {
+		logger := &BufferedLogger{}
+		session := NewSession("test_session", logger)
+
+		// Set debug step first
+		testStep := "テスト処理"
+		session.SetDebugStep(testStep)
+
+		// Clear buffer to test only ClearDebugStep output
+		logger.buffer.Reset()
+
+		// Clear debug step
+		session.ClearDebugStep()
+
+		logOutput := logger.buffer.String()
+		expectedLog := fmt.Sprintf("**** [%s] END\n", testStep)
+		if logOutput != expectedLog {
+			t.Errorf("Expected log %q, got %q", expectedLog, logOutput)
+		}
+	})
+
+	t.Run("ClearDebugStep does not log when no debug step is set", func(t *testing.T) {
+		logger := &BufferedLogger{}
+		session := NewSession("test_session", logger)
+
+		// Clear debug step without setting it first
+		session.ClearDebugStep()
+
+		logOutput := logger.buffer.String()
+		if logOutput != "" {
+			t.Errorf("Expected no log output, got %q", logOutput)
+		}
+	})
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -321,5 +322,218 @@ func Test_parseNthOfTypeParam(t *testing.T) {
 				t.Errorf("parseNthOfTypeParam() got2 = %v, want %v", got2, tt.want2)
 			}
 		})
+	}
+}
+
+// CustomUnmarshaller はUnmarshallerインターフェースを実装したテスト用の型
+type CustomUnmarshaller struct {
+	Value string
+}
+
+func (c *CustomUnmarshaller) Unmarshal(s string) error {
+	c.Value = "custom:" + s
+	return nil
+}
+
+// ChromeUnmarshalでUnmarshallerインターフェースが正しく動作することをテストする
+func TestChromeUnmarshalWithUnmarshaller(t *testing.T) {
+	// create a test server to serve the page
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, `
+<html>
+<body>
+<div id="test">hello world</div>
+</body>
+</html>
+`,
+		)
+	}))
+	defer ts.Close()
+
+	// create context with CI-aware Chrome options using test helper
+	testOptions := NewTestChromeOptions(true)
+	allocOptions := []chromedp.ExecAllocatorOption{
+		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
+	}
+	if testOptions.Headless {
+		allocOptions = append(allocOptions,
+			chromedp.Headless,
+			chromedp.DisableGPU,
+		)
+	}
+	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
+	defer allocCancel()
+
+	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type TestRecord struct {
+		Custom CustomUnmarshaller `find:"div#test"`
+	}
+
+	var testRecord TestRecord
+	err = ChromeUnmarshal(ctx, &testRecord, "body", UnmarshalOption{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "custom:hello world"
+	if testRecord.Custom.Value != expected {
+		t.Errorf("CustomUnmarshaller.Value = %v, want %v", testRecord.Custom.Value, expected)
+	}
+}
+
+// nth-child関連セレクタでエラーが発生することをテストする
+func TestChromeUnmarshalNthChildErrors(t *testing.T) {
+	// create a test server to serve the page
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, `
+<html>
+<body>
+<div>item1</div>
+<div>item2</div>
+<div>item3</div>
+</body>
+</html>
+`,
+		)
+	}))
+	defer ts.Close()
+
+	// create context with CI-aware Chrome options using test helper
+	testOptions := NewTestChromeOptions(true)
+	allocOptions := []chromedp.ExecAllocatorOption{
+		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
+	}
+	if testOptions.Headless {
+		allocOptions = append(allocOptions,
+			chromedp.Headless,
+			chromedp.DisableGPU,
+		)
+	}
+	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
+	defer allocCancel()
+
+	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// nth-childセレクタを使ったスライスでエラーが発生することをテスト
+	type TestRecord struct {
+		Items []string `find:"div:nth-child(1)"`
+	}
+
+	var testRecord TestRecord
+	err = ChromeUnmarshal(ctx, &testRecord, "body", UnmarshalOption{})
+	if err == nil {
+		t.Error("Expected error for nth-child selector in slice field, but got none")
+	}
+	if !strings.Contains(err.Error(), "nth-child") {
+		t.Errorf("Expected error message to contain 'nth-child', but got: %s", err.Error())
+	}
+
+	// nth-last-childセレクタを使った場合もテスト
+	type TestRecord2 struct {
+		Items []string `find:"div:nth-last-child(1)"`
+	}
+
+	var testRecord2 TestRecord2
+	err = ChromeUnmarshal(ctx, &testRecord2, "body", UnmarshalOption{})
+	if err == nil {
+		t.Error("Expected error for nth-last-child selector in slice field, but got none")
+	}
+	if !strings.Contains(err.Error(), "nth-last-child") {
+		t.Errorf("Expected error message to contain 'nth-last-child', but got: %s", err.Error())
+	}
+
+	// nth-last-of-typeセレクタを使った場合もテスト
+	type TestRecord3 struct {
+		Items []string `find:"div:nth-last-of-type(1)"`
+	}
+
+	var testRecord3 TestRecord3
+	err = ChromeUnmarshal(ctx, &testRecord3, "body", UnmarshalOption{})
+	if err == nil {
+		t.Error("Expected error for nth-last-of-type selector in slice field, but got none")
+	}
+	if !strings.Contains(err.Error(), "nth-last-of-type") {
+		t.Errorf("Expected error message to contain 'nth-last-of-type', but got: %s", err.Error())
+	}
+}
+
+// first-child, last-childセレクタでnth-of-typeが付与されないことをテストする
+func TestChromeUnmarshalFirstLastChildSelectors(t *testing.T) {
+	// create a test server to serve the page
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, `
+<html>
+<body>
+<div>first</div>
+<div>middle</div>
+<div>last</div>
+</body>
+</html>
+`,
+		)
+	}))
+	defer ts.Close()
+
+	// create context with CI-aware Chrome options using test helper
+	testOptions := NewTestChromeOptions(true)
+	allocOptions := []chromedp.ExecAllocatorOption{
+		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
+	}
+	if testOptions.Headless {
+		allocOptions = append(allocOptions,
+			chromedp.Headless,
+			chromedp.DisableGPU,
+		)
+	}
+	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
+	defer allocCancel()
+
+	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// first-childとlast-childが正常に動作することを確認
+	type TestRecord struct {
+		First string `find:"div:first-child"`
+		Last  string `find:"div:last-child"`
+	}
+
+	var testRecord TestRecord
+	err = ChromeUnmarshal(ctx, &testRecord, "body", UnmarshalOption{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if testRecord.First != "first" {
+		t.Errorf("Expected 'first', got %s", testRecord.First)
+	}
+	if testRecord.Last != "last" {
+		t.Errorf("Expected 'last', got %s", testRecord.Last)
 	}
 }

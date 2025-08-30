@@ -28,10 +28,11 @@ func parseNthOfTypeParam(cssSelector string) (string, int, int) {
 	if matched[4] != "" {
 		b, _ = strconv.Atoi(matched[4])
 	}
-	if matched[2] == "even" {
+	switch matched[2] {
+	case "even":
 		a = 2
 		b = 0
-	} else if matched[2] == "odd" {
+	case "odd":
 		a = 2
 		b = 1
 	}
@@ -57,13 +58,49 @@ func resolveNthOfType(cssSelector string, n int) string {
 	return fmt.Sprintf("%v:nth-of-type(%v)", strings.Join(selectors, " "), x)
 }
 
+func hasUnsupportedNthSelectors(cssSelector string) bool {
+	unsupportedPatterns := []string{
+		":nth-child(",
+		":nth-last-child(",
+		":nth-last-of-type(",
+	}
+	for _, pattern := range unsupportedPatterns {
+		if strings.Contains(cssSelector, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFirstLastChildSelectors(cssSelector string) bool {
+	firstLastPatterns := []string{
+		":first-child",
+		":last-child",
+	}
+	for _, pattern := range firstLastPatterns {
+		if strings.Contains(cssSelector, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 func fillValue(ctx context.Context, cssSelector string, value reflect.Value, selected []string, opt UnmarshalOption) error {
 	// texts
 	if value.Kind() == reflect.Slice {
+		// Error if nth-child related selectors are present
+		if hasUnsupportedNthSelectors(cssSelector) {
+			return fmt.Errorf("unsupported selector '%s' for slice fields. nth-child, nth-last-child, nth-last-of-type selectors are not supported for slice fields", cssSelector)
+		}
+
 		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
 		for i := 0; i < len(selected); i++ {
-			// TODO nth-child, nth-last-child, nth-last-of-type があったらエラーにする / first-child, last-child があったら nth-of-typeは付けない
-			err := fillValue(ctx, resolveNthOfType(cssSelector, i), rv.Index(i), []string{selected[i]}, opt)
+			resolvedSelector := cssSelector
+			// Skip nth-of-type addition if first-child or last-child selectors are present
+			if !hasFirstLastChildSelectors(cssSelector) {
+				resolvedSelector = resolveNthOfType(cssSelector, i)
+			}
+			err := fillValue(ctx, resolvedSelector, rv.Index(i), []string{selected[i]}, opt)
 			if err != nil {
 				return fmt.Errorf("#%d: %w", i, err)
 			}
@@ -111,6 +148,11 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 		}
 		if !value.CanAddr() {
 			return fmt.Errorf("failed CanAddr: %v, %v", value, value.Type())
+		}
+
+		// Call custom Unmarshal method if the type implements Unmarshaller interface
+		if inf, ok := value.Addr().Interface().(Unmarshaller); ok {
+			return inf.Unmarshal(s)
 		}
 
 		if value.Kind() == reflect.Struct {

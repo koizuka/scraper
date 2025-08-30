@@ -318,6 +318,14 @@ func TestDownloadOptions(t *testing.T) {
 		SaveAs:  "test.pdf",
 	}
 
+	// Use the options to avoid unused write warnings
+	if options.Glob != "*.pdf" {
+		t.Error("Glob should be *.pdf")
+	}
+	if options.SaveAs != "test.pdf" {
+		t.Error("SaveAs should be test.pdf")
+	}
+
 	if options.Timeout != 30*time.Second {
 		t.Errorf("Timeout = %v, want %v", options.Timeout, 30*time.Second)
 	}
@@ -342,13 +350,22 @@ func TestScraperTypeDetection(t *testing.T) {
 
 // TestXPathEscaping tests XPath injection prevention
 func TestXPathEscaping(t *testing.T) {
-	// This test is more relevant for Chrome scraper, but we can test the escaping logic
+	// Test the new proper XPath escaping function
 	text := "Test's link"
-	escapedText := strings.ReplaceAll(text, "'", "\\'")
-	expected := "Test\\'s link"
+	escapedText := escapeXPathText(text)
+	expected := "\"Test's link\""
 
 	if escapedText != expected {
 		t.Errorf("XPath escaping failed: got %q, want %q", escapedText, expected)
+	}
+
+	// Test complex case with both quote types
+	complexText := "Test's \"complex\" link"
+	complexEscaped := escapeXPathText(complexText)
+	expectedComplex := "concat('Test', \"'\", 's \"complex\" link')"
+
+	if complexEscaped != expectedComplex {
+		t.Errorf("Complex XPath escaping failed: got %q, want %q", complexEscaped, expectedComplex)
 	}
 }
 

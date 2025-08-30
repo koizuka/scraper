@@ -432,19 +432,23 @@ func (session *Session) SendKeys(selector, value string) error {
 
 // Click implements UnifiedScraper.Click
 func (session *Session) Click(selector string) error {
-	if session.currentPage == nil {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
 		return fmt.Errorf("session: no current page available for click")
 	}
 
 	// Try to find a clickable element (link or form submit)
-	selection := session.currentPage.Find(selector)
+	selection := currentPage.Find(selector)
 	if selection.Length() == 0 {
 		return fmt.Errorf("session: selector %q not found", selector)
 	}
 
 	// Check if it's a link
 	if _, exists := selection.Attr("href"); exists {
-		resp, err := session.FollowSelectionLink(session.currentPage, selection, "href")
+		resp, err := session.FollowSelectionLink(currentPage, selection, "href")
 		if err != nil {
 			return err
 		}
@@ -452,7 +456,9 @@ func (session *Session) Click(selector string) error {
 		if err != nil {
 			return err
 		}
+		session.mu.Lock()
 		session.currentPage = page
+		session.mu.Unlock()
 		return nil
 	}
 
@@ -489,9 +495,20 @@ func (session *Session) SubmitForm(formSelector string, params map[string]string
 
 // submitUnified handles form submission for the unified interface
 func (session *Session) submitUnified(formSelector string, params map[string]string) error {
-	if session.currentPage == nil {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
 		return fmt.Errorf("session: no current page available for form submission")
 	}
+
+	// Ensure cleanup of pending form data on exit (defer handles all exit paths)
+	defer func() {
+		session.mu.Lock()
+		session.pendingFormData = make(map[string]string) // Clear to prevent memory leaks
+		session.mu.Unlock()
+	}()
 
 	if params == nil {
 		session.mu.RLock()
@@ -515,7 +532,7 @@ func (session *Session) submitUnified(formSelector string, params map[string]str
 		}
 	}
 
-	resp, err := session.FormAction(session.currentPage, formSelector, convertedParams)
+	resp, err := session.FormAction(currentPage, formSelector, convertedParams)
 	if err != nil {
 		return err
 	}
@@ -525,11 +542,8 @@ func (session *Session) submitUnified(formSelector string, params map[string]str
 		return err
 	}
 
-	session.currentPage = page
-
-	// Clear pending form data
 	session.mu.Lock()
-	session.pendingFormData = nil
+	session.currentPage = page
 	session.mu.Unlock()
 
 	return nil
@@ -537,11 +551,15 @@ func (session *Session) submitUnified(formSelector string, params map[string]str
 
 // FollowAnchor implements UnifiedScraper.FollowAnchor
 func (session *Session) FollowAnchor(text string) error {
-	if session.currentPage == nil {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
 		return fmt.Errorf("session: no current page available for link following")
 	}
 
-	resp, err := session.FollowAnchorText(session.currentPage, text)
+	resp, err := session.FollowAnchorText(currentPage, text)
 	if err != nil {
 		return err
 	}
@@ -551,7 +569,9 @@ func (session *Session) FollowAnchor(text string) error {
 		return err
 	}
 
+	session.mu.Lock()
 	session.currentPage = page
+	session.mu.Unlock()
 	return nil
 }
 

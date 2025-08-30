@@ -357,10 +357,50 @@ func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[s
 
 // FollowAnchor implements UnifiedScraper.FollowAnchor
 func (chromeSession *ChromeSession) FollowAnchor(text string) error {
-	// Escape single quotes to prevent XPath injection
-	escapedText := strings.ReplaceAll(text, "'", "\\'")
-	xpath := fmt.Sprintf("//a[contains(text(), '%s')]", escapedText)
+	// Use proper XPath escaping to prevent injection attacks
+	// XPath 1.0 doesn't have a built-in escape function, so we construct a concat() expression
+	escapedText := escapeXPathText(text)
+	xpath := fmt.Sprintf("//a[contains(text(), %s)]", escapedText)
 	return chromedp.Run(chromeSession.Ctx, chromedp.Click(xpath, chromedp.BySearch))
+}
+
+// escapeXPathText properly escapes text for use in XPath expressions
+// Uses concat() to handle both single and double quotes safely
+func escapeXPathText(text string) string {
+	// If text contains no quotes, wrap in single quotes
+	if !strings.Contains(text, "'") && !strings.Contains(text, "\"") {
+		return "'" + text + "'"
+	}
+
+	// If text contains only double quotes (no single quotes), wrap in single quotes
+	if !strings.Contains(text, "'") {
+		return "'" + text + "'"
+	}
+
+	// If text contains only single quotes (no double quotes), wrap in double quotes
+	if !strings.Contains(text, "\"") {
+		return "\"" + text + "\""
+	}
+
+	// If text contains both single and double quotes, use concat()
+	parts := strings.Split(text, "'")
+	var concatParts []string
+
+	for i, part := range parts {
+		if i > 0 {
+			// Add the single quote as a separate part
+			concatParts = append(concatParts, "\"'\"")
+		}
+		if part != "" {
+			concatParts = append(concatParts, "'"+part+"'")
+		}
+	}
+
+	if len(concatParts) == 1 {
+		return concatParts[0]
+	}
+
+	return "concat(" + strings.Join(concatParts, ", ") + ")"
 }
 
 // SavePage implements UnifiedScraper.SavePage (calls existing SaveHtml action)

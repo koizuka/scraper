@@ -88,15 +88,15 @@ func hasFirstLastChildSelectors(cssSelector string) bool {
 func fillValue(ctx context.Context, cssSelector string, value reflect.Value, selected []string, opt UnmarshalOption) error {
 	// texts
 	if value.Kind() == reflect.Slice {
-		// nth-child関連のセレクタがある場合はエラーにする
+		// Error if nth-child related selectors are present
 		if hasUnsupportedNthSelectors(cssSelector) {
-			return fmt.Errorf("nth-child, nth-last-child, nth-last-of-type selectors are not supported for slice fields: %s", cssSelector)
+			return fmt.Errorf("unsupported selector '%s' for slice fields. nth-child, nth-last-child, nth-last-of-type selectors are not supported for slice fields", cssSelector)
 		}
 
 		rv := reflect.MakeSlice(value.Type(), len(selected), len(selected))
 		for i := 0; i < len(selected); i++ {
 			resolvedSelector := cssSelector
-			// first-child, last-child があったら nth-of-typeは付けない
+			// Skip nth-of-type addition if first-child or last-child selectors are present
 			if !hasFirstLastChildSelectors(cssSelector) {
 				resolvedSelector = resolveNthOfType(cssSelector, i)
 			}
@@ -150,7 +150,7 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 			return fmt.Errorf("failed CanAddr: %v, %v", value, value.Type())
 		}
 
-		// その型が Unmarshaller を実装しているならそれを呼ぶ
+		// Call custom Unmarshal method if the type implements Unmarshaller interface
 		if inf, ok := value.Addr().Interface().(Unmarshaller); ok {
 			return inf.Unmarshal(s)
 		}

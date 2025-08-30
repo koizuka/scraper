@@ -284,3 +284,140 @@ func (session *ChromeSession) RunNavigate(URL string) (*network.Response, error)
 func (session *ChromeSession) Unmarshal(v interface{}, cssSelector string, opt UnmarshalOption) error {
 	return ChromeUnmarshal(session.Ctx, v, cssSelector, opt)
 }
+
+// UnifiedScraper interface implementation for ChromeSession
+
+// Navigate implements UnifiedScraper.Navigate
+func (chromeSession *ChromeSession) Navigate(url string) error {
+	return chromedp.Run(chromeSession.Ctx, chromedp.Navigate(url))
+}
+
+// WaitVisible implements UnifiedScraper.WaitVisible
+func (chromeSession *ChromeSession) WaitVisible(selector string) error {
+	return chromedp.Run(chromeSession.Ctx, chromedp.WaitVisible(selector, chromedp.ByQuery))
+}
+
+// SendKeys implements UnifiedScraper.SendKeys
+func (chromeSession *ChromeSession) SendKeys(selector, value string) error {
+	return chromedp.Run(chromeSession.Ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery))
+}
+
+// Click implements UnifiedScraper.Click
+func (chromeSession *ChromeSession) Click(selector string) error {
+	return chromedp.Run(chromeSession.Ctx, chromedp.Click(selector, chromedp.ByQuery))
+}
+
+// SubmitForm implements UnifiedScraper.SubmitForm
+func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[string]string) error {
+	var tasks []chromedp.Action
+
+	// Fill form fields - clear first, then send keys
+	for selector, value := range params {
+		tasks = append(tasks,
+			chromedp.Clear(selector, chromedp.ByQuery),
+			chromedp.SendKeys(selector, value, chromedp.ByQuery),
+		)
+	}
+
+	// Try multiple submit strategies
+	submitSelectors := []string{
+		formSelector + " input[type=submit]",
+		formSelector + " button[type=submit]",
+		formSelector + " button:not([type])", // default button type is submit
+		formSelector + " input[type=image]",  // image submit buttons
+	}
+
+	// Try each selector until one works
+	var lastErr error
+	for _, submitSelector := range submitSelectors {
+		submitTasks := append(tasks, chromedp.Click(submitSelector, chromedp.ByQuery))
+		err := chromedp.Run(chromeSession.Ctx, submitTasks...)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		// Continue to next selector if this one failed
+	}
+
+	// If all submit button attempts failed, try submitting via Enter key on form
+	if len(params) > 0 {
+		// Get the last field selector and try pressing Enter
+		for selector := range params {
+			enterTasks := append(tasks, chromedp.SendKeys(selector, "\n", chromedp.ByQuery))
+			err := chromedp.Run(chromeSession.Ctx, enterTasks...)
+			if err == nil {
+				return nil
+			}
+			break // Only try the first field
+		}
+	}
+
+	return fmt.Errorf("failed to submit form %q: %w", formSelector, lastErr)
+}
+
+// FollowAnchor implements UnifiedScraper.FollowAnchor
+func (chromeSession *ChromeSession) FollowAnchor(text string) error {
+	// Escape single quotes to prevent XPath injection
+	escapedText := strings.ReplaceAll(text, "'", "\\'")
+	xpath := fmt.Sprintf("//a[contains(text(), '%s')]", escapedText)
+	return chromedp.Run(chromeSession.Ctx, chromedp.Click(xpath, chromedp.BySearch))
+}
+
+// SavePage implements UnifiedScraper.SavePage (calls existing SaveHtml action)
+func (chromeSession *ChromeSession) SavePage() (string, error) {
+	var filename string
+	action := chromeSession.SaveHtml(&filename)
+	err := chromedp.Run(chromeSession.Ctx, action)
+	return filename, err
+}
+
+// ExtractData implements UnifiedScraper.ExtractData
+func (chromeSession *ChromeSession) ExtractData(v interface{}, selector string, opt UnmarshalOption) error {
+	return ChromeUnmarshal(chromeSession.Ctx, v, selector, opt)
+}
+
+// DownloadResource implements UnifiedScraper.DownloadResource
+func (chromeSession *ChromeSession) DownloadResource(options UnifiedDownloadOptions) (string, error) {
+	// Set default timeout if not specified
+	timeout := options.Timeout
+	if timeout == 0 {
+		timeout = DefaultDownloadTimeout
+	}
+
+	var filename string
+	downloadOptions := DownloadFileOptions{
+		Timeout: timeout,
+		Glob:    options.Glob,
+	}
+
+	// Create a basic download action that waits for any download to complete
+	// This is a simplified implementation - for complex scenarios, use DownloadFile directly
+	action := chromeSession.DownloadFile(&filename, downloadOptions)
+	err := chromedp.Run(chromeSession.Ctx, action)
+
+	if err != nil {
+		return "", fmt.Errorf("download failed - consider using DownloadFile method directly for complex scenarios: %w", err)
+	}
+
+	return filename, nil
+}
+
+// GetDebugStep implements UnifiedScraper.GetDebugStep
+func (chromeSession *ChromeSession) GetDebugStep() string {
+	return chromeSession.Session.GetDebugStep()
+}
+
+// SetDebugStep implements UnifiedScraper.SetDebugStep
+func (chromeSession *ChromeSession) SetDebugStep(step string) {
+	chromeSession.Session.SetDebugStep(step)
+}
+
+// ClearDebugStep implements UnifiedScraper.ClearDebugStep
+func (chromeSession *ChromeSession) ClearDebugStep() {
+	chromeSession.Session.ClearDebugStep()
+}
+
+// Printf implements UnifiedScraper.Printf
+func (chromeSession *ChromeSession) Printf(format string, a ...interface{}) {
+	chromeSession.Session.Printf(format, a...)
+}

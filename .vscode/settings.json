@@ -1,13 +1,20 @@
 {
   "cSpell.words": [
+    "cdproto",
     "chromedp",
     "cookiejar",
+    "ctxt",
+    "favnovel",
+    "Getenv",
     "goquery",
+    "KHTML",
+    "Mashaller",
     "orirawlings",
     "Puerkito",
     "strconv",
     "Submatch",
     "Unmarshal",
+    "Unmarshall",
     "Unmarshaller"
   ]
 }

@@ -10,7 +10,9 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
 )
 
 const (
@@ -37,6 +39,11 @@ type Session struct {
 	jar                *cookiejar.Jar
 	BodyFilter         func(resp *Response, body []byte) ([]byte, error)
 	debugStep          string // debug step label for logging
+
+	// Fields for unified scraper interface
+	currentPage     *Page             // Current page for unified operations
+	pendingFormData map[string]string // Form data to be submitted
+	mu              sync.RWMutex      // Mutex for thread safety
 }
 
 type RequestError struct {
@@ -390,3 +397,277 @@ func (session *Session) FollowAnchorText(page *Page, text string) (*Response, er
 		FollowAnchorTextOption{CheckAlt: true, NumLink: 1},
 	)
 }
+
+// UnifiedScraper interface implementation for Session
+
+// Navigate implements UnifiedScraper.Navigate
+func (session *Session) Navigate(url string) error {
+	page, err := session.GetPage(url)
+	if err != nil {
+		return err
+	}
+	session.currentPage = page
+	return nil
+}
+
+// WaitVisible implements UnifiedScraper.WaitVisible
+// For HTTP-based scraping, this is a no-op since elements are immediately available
+func (session *Session) WaitVisible(selector string) error {
+	return nil
+}
+
+// SendKeys implements UnifiedScraper.SendKeys
+// For HTTP scraping, this stores form data to be submitted later
+func (session *Session) SendKeys(selector, value string) error {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Store form data in session for later submission
+	if session.pendingFormData == nil {
+		session.pendingFormData = make(map[string]string)
+	}
+	session.pendingFormData[selector] = value
+	return nil
+}
+
+// Click implements UnifiedScraper.Click
+func (session *Session) Click(selector string) error {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
+		return fmt.Errorf("session: no current page available for click")
+	}
+
+	// Try to find a clickable element (link or form submit)
+	selection := currentPage.Find(selector)
+	if selection.Length() == 0 {
+		return fmt.Errorf("session: selector %q not found", selector)
+	}
+
+	// Check if it's a link
+	if _, exists := selection.Attr("href"); exists {
+		resp, err := session.FollowSelectionLink(currentPage, selection, "href")
+		if err != nil {
+			return err
+		}
+		page, err := resp.Page()
+		if err != nil {
+			return err
+		}
+		session.mu.Lock()
+		session.currentPage = page
+		session.mu.Unlock()
+		return nil
+	}
+
+	// Check if it's a form submit button
+	if selection.Is("input[type=submit], button[type=submit], button") {
+		form := selection.Closest("form")
+		if form.Length() > 0 {
+			formSelector := ""
+			if name, exists := form.Attr("name"); exists {
+				formSelector = fmt.Sprintf("form[name=%s]", name)
+			} else if id, exists := form.Attr("id"); exists {
+				formSelector = fmt.Sprintf("form#%s", id)
+			} else {
+				formSelector = "form"
+			}
+
+			session.mu.RLock()
+			formData := make(map[string]string)
+			for k, v := range session.pendingFormData {
+				formData[k] = v
+			}
+			session.mu.RUnlock()
+			return session.submitUnified(formSelector, formData)
+		}
+	}
+
+	return fmt.Errorf("session: selector %q is not clickable", selector)
+}
+
+// SubmitForm implements UnifiedScraper.SubmitForm
+func (session *Session) SubmitForm(formSelector string, params map[string]string) error {
+	return session.submitUnified(formSelector, params)
+}
+
+// submitUnified handles form submission for the unified interface
+func (session *Session) submitUnified(formSelector string, params map[string]string) error {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
+		return fmt.Errorf("session: no current page available for form submission")
+	}
+
+	// Ensure cleanup of pending form data on exit (defer handles all exit paths)
+	defer func() {
+		session.mu.Lock()
+		session.pendingFormData = make(map[string]string) // Clear to prevent memory leaks
+		session.mu.Unlock()
+	}()
+
+	if params == nil {
+		session.mu.RLock()
+		params = make(map[string]string)
+		for k, v := range session.pendingFormData {
+			params[k] = v
+		}
+		session.mu.RUnlock()
+	}
+
+	// Convert CSS selectors to form field names for HTTP scraping
+	// For input[name=username] -> username
+	convertedParams := make(map[string]string)
+	for selector, value := range params {
+		fieldName := extractNameFromSelector(selector)
+		if fieldName != "" {
+			convertedParams[fieldName] = value
+		} else {
+			// If we can't extract the name, use the selector as-is
+			convertedParams[selector] = value
+		}
+	}
+
+	resp, err := session.FormAction(currentPage, formSelector, convertedParams)
+	if err != nil {
+		return err
+	}
+
+	page, err := resp.Page()
+	if err != nil {
+		return err
+	}
+
+	session.mu.Lock()
+	session.currentPage = page
+	session.mu.Unlock()
+
+	return nil
+}
+
+// FollowAnchor implements UnifiedScraper.FollowAnchor
+func (session *Session) FollowAnchor(text string) error {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
+		return fmt.Errorf("session: no current page available for link following")
+	}
+
+	resp, err := session.FollowAnchorText(currentPage, text)
+	if err != nil {
+		return err
+	}
+
+	page, err := resp.Page()
+	if err != nil {
+		return err
+	}
+
+	session.mu.Lock()
+	session.currentPage = page
+	session.mu.Unlock()
+	return nil
+}
+
+// SavePage implements UnifiedScraper.SavePage
+func (session *Session) SavePage() (string, error) {
+	if session.currentPage == nil {
+		return "", fmt.Errorf("session: no current page available")
+	}
+
+	// Ensure directory exists
+	dirname := session.getDirectory()
+	if _, err := os.Stat(dirname); err != nil && os.IsNotExist(err) {
+		if err := os.MkdirAll(dirname, os.FileMode(0755)); err != nil {
+			return "", fmt.Errorf("session: failed to create directory %s: %w", dirname, err)
+		}
+	}
+
+	session.invokeCount++
+	filename := session.getHtmlFilename()
+
+	html, err := session.currentPage.Html()
+	if err != nil {
+		return "", err
+	}
+
+	body := []byte(html)
+	err = os.WriteFile(filename, body, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
+	return filename, nil
+}
+
+// ExtractData implements UnifiedScraper.ExtractData
+func (session *Session) ExtractData(v interface{}, selector string, opt UnmarshalOption) error {
+	if session.currentPage == nil {
+		return fmt.Errorf("session: no current page available for data extraction")
+	}
+
+	selection := session.currentPage.Find(selector)
+	return Unmarshal(v, selection, opt)
+}
+
+// DownloadResource implements UnifiedScraper.DownloadResource
+func (session *Session) DownloadResource(options UnifiedDownloadOptions) (string, error) {
+	// For HTTP scraping, we need to have already followed a download link
+	// This method assumes the current response is a downloadable file
+	if session.currentPage == nil {
+		return "", fmt.Errorf("session: no current page available for download")
+	}
+
+	// For HTTP downloads, we can try to save the current response if it's a file
+	// This is a basic implementation - more complex scenarios should use direct HTTP methods
+	session.invokeCount++
+	filename := session.getHtmlFilename()
+
+	// Change extension based on content type or SaveAs option
+	if options.SaveAs != "" {
+		filename = path.Join(session.getDirectory(), options.SaveAs)
+	}
+
+	// Try to get the raw content (this is a simplified approach)
+	html, err := session.currentPage.Html()
+	if err != nil {
+		return "", fmt.Errorf("session: failed to get page content for download: %w", err)
+	}
+
+	body := []byte(html)
+	err = os.WriteFile(filename, body, 0644)
+	if err != nil {
+		return "", fmt.Errorf("session: failed to save downloaded content: %w", err)
+	}
+
+	session.Printf("%s DOWNLOAD saved to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
+	return filename, nil
+}
+
+// GetDebugStep implements UnifiedScraper.GetDebugStep
+func (session *Session) GetDebugStep() string {
+	return session.debugStep
+}
+
+// extractNameFromSelector extracts the name attribute from CSS selectors
+// Examples: input[name=username] -> username, [name="password"] -> password
+func extractNameFromSelector(selector string) string {
+	// Match patterns like input[name=fieldname] or [name="fieldname"]
+	re := regexp.MustCompile(`\[name=["']?([^"'\]]+)["']?\]`)
+	matches := re.FindStringSubmatch(selector)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
+// SetDebugStep implements UnifiedScraper.SetDebugStep - already exists
+
+// ClearDebugStep implements UnifiedScraper.ClearDebugStep - already exists

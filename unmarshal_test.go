@@ -212,7 +212,7 @@ func TestUnmarshallFloat(t *testing.T) {
 		shouldBe := `strconv.ParseFloat: parsing "test": invalid syntax`
 		err = Unmarshal(&value, page.Selection.Find("span"), UnmarshalOption{})
 		if err == nil {
-			t.Error(fmt.Errorf("shoulb be an error"))
+			t.Error(fmt.Errorf("should be an error"))
 		} else {
 			errorString := err.Error()
 			if errorString != shouldBe {

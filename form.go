@@ -91,7 +91,10 @@ func (page *Page) Form(selector string) (*Form, error) {
 		if !ok {
 			t = "text"
 		}
-		value, _ := s.Attr("value")
+		value, ok := s.Attr("value")
+		if !ok && strings.ToLower(t) == "radio" {
+			value = "on"
+		}
 		element, ok := elements[name]
 		if !ok {
 			element = &FormElement{
@@ -209,7 +212,11 @@ func (form *Form) Set(name string, value string) error {
 			}
 		}
 		if found == nil {
-			return fmt.Errorf("value %v is not available in %#v", value, element.AvailableValues)
+			var availableOptions []string
+			for _, val := range element.AvailableValues {
+				availableOptions = append(availableOptions, fmt.Sprintf("Value:%q Label:%q", val.Value, val.Label))
+			}
+			return fmt.Errorf("value %v is not available in [%s]", value, strings.Join(availableOptions, ", "))
 		}
 		element.Value = found
 	}

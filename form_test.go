@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -74,6 +75,22 @@ func TestFormPage(t *testing.T) {
 			map[string]int{"name1": 1},
 		},
 		{
+			"input radio without value -> default to 'on'",
+			"<form><input name='name1' type='radio'></input></form>",
+			"form",
+			map[string]string{"name1": "on"},
+			map[string]string{"name1": ""},
+			map[string]int{"name1": 1},
+		},
+		{
+			"input radio multiple without value -> default to 'on'",
+			"<form><input name='name1' type='radio' /><input name='name1' type='radio' checked /></form>",
+			"form",
+			map[string]string{"name1": "on"},
+			map[string]string{"name1": ""},
+			map[string]int{"name1": 2},
+		},
+		{
 			"select/option single without selected -> select first one",
 			"<form><select name='name1'><option value='value1'>label1</option></select></form>",
 			"form",
@@ -125,7 +142,7 @@ func TestFormPage(t *testing.T) {
 			if elem == nil {
 				t.Errorf(fmt.Sprintf("%v: form.Elements[%v] == nil", i, name))
 			} else if elem.Value == nil {
-				t.Errorf(fmt.Sprintf("%v: avaiableValue of %v == nil", i, name))
+				t.Errorf(fmt.Sprintf("%v: availableValue of %v == nil", i, name))
 			} else if elem.Value.Value != shouldBe {
 				t.Errorf(fmt.Sprintf("%v: value of %v: %v != %v", i, name, shouldBe, elem.Value.Value))
 			}
@@ -135,7 +152,7 @@ func TestFormPage(t *testing.T) {
 			if elem == nil {
 				t.Errorf(fmt.Sprintf("%v: form.Elements[%v] == nil", i, name))
 			} else if elem.Value == nil {
-				t.Errorf(fmt.Sprintf("%v: avaiableValue of %v == nil", i, name))
+				t.Errorf(fmt.Sprintf("%v: availableValue of %v == nil", i, name))
 			} else if elem.Value.Label != shouldBe {
 				t.Errorf(fmt.Sprintf("%v: label of %v: %v != %v", i, name, shouldBe, elem.Value.Value))
 			}
@@ -146,5 +163,38 @@ func TestFormPage(t *testing.T) {
 				t.Errorf("%v: number ov availableValues != %v", i, shouldBe)
 			}
 		}
+	}
+}
+
+// test Form::Set() error message formatting
+func TestFormSetErrorMessage(t *testing.T) {
+	testUrl, err := url.Parse("http://localhost/")
+	if err != nil {
+		t.Error(err)
+	}
+	logger := &DummyLogger{}
+
+	html := "<form><select name='test'><option value='value1'>Label1</option><option value='value2'>Label2</option></select></form>"
+	buf := bytes.NewBufferString(html)
+	doc, err := goquery.NewDocumentFromReader(buf)
+	if err != nil {
+		t.Error(err)
+	}
+
+	page := &Page{doc, testUrl, logger}
+	form, err := page.Form("form")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = form.Set("test", "invalid_value")
+	if err == nil {
+		t.Error("Expected error for invalid value")
+	}
+
+	errorMessage := err.Error()
+	// Error message should contain Value and Label information, not memory addresses
+	if !strings.Contains(errorMessage, "value1") || !strings.Contains(errorMessage, "Label1") {
+		t.Errorf("Error message should contain readable value/label pairs, got: %s", errorMessage)
 	}
 }

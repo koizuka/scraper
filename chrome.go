@@ -90,29 +90,48 @@ func (session *Session) NewChrome() (*ChromeSession, context.CancelFunc, error) 
 
 func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 	return chromedp.ActionFunc(func(ctxt context.Context) error {
-		var html string
-		err := chromedp.OuterHTML("html", &html, chromedp.ByQuery).Do(ctxt)
-		if err != nil {
-			return err
-		}
-
 		session.invokeCount++
 		fn := session.getHtmlFilename()
-		body := []byte(html)
-		err = os.WriteFile(fn, body, 0644)
-		if err != nil {
-			return err
-		}
+
 		if filename != nil {
 			*filename = fn
 		}
-		session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
-		var title string
-		err = chromedp.Title(&title).Do(ctxt)
-		if err == nil {
-			session.Printf("* %v\n", title)
+
+		if session.NotUseNetwork {
+			// Replay mode: load from saved file
+			session.Printf("%s LOAD from %v\n", session.getDebugPrefix(), fn)
+			body, err := os.ReadFile(fn)
+			if err != nil {
+				return RetryAndRecordError{fn}
+			}
+			session.Printf("%s LOADED %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
+			return nil
+		} else {
+			// Record mode: get HTML from browser and save
+			var html string
+			err := chromedp.OuterHTML("html", &html, chromedp.ByQuery).Do(ctxt)
+			if err != nil {
+				return err
+			}
+
+			body := []byte(html)
+
+			// Save HTML if SaveToFile is enabled
+			if session.SaveToFile {
+				err = os.WriteFile(fn, body, 0644)
+				if err != nil {
+					return err
+				}
+				session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
+			}
+
+			var title string
+			err = chromedp.Title(&title).Do(ctxt)
+			if err == nil {
+				session.Printf("* %v\n", title)
+			}
+			return nil
 		}
-		return nil
 	})
 }
 
@@ -135,11 +154,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 		if filename == nil {
 			return fmt.Errorf("filename is nil")
 		}
-		download := make(chan string)
 
-		if options.Timeout == 0 {
-			options.Timeout = 5 * time.Second
-		}
 		if options.Glob == "" {
 			options.Glob = "*"
 		} else {
@@ -154,74 +169,102 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 			}
 		}
 
-		downloadCtx, cancel := context.WithTimeout(ctxt, options.Timeout)
-		defer cancel()
-
-		startTime := time.Now()
-
-		suggestedFilename := ""
-		chromedp.ListenTarget(downloadCtx, func(ev interface{}) {
-			switch ev := ev.(type) {
-			case *browser.EventDownloadWillBegin:
-				suggestedFilename = path.Join(session.DownloadPath, ev.SuggestedFilename)
-			case *browser.EventDownloadProgress:
-				switch ev.State {
-				case browser.DownloadProgressStateCompleted:
-					download <- suggestedFilename
-				case browser.DownloadProgressStateCanceled:
-					download <- ""
-				}
-			}
-		})
-		err := chromedp.Run(ctxt, actions...)
-		if err != nil && !strings.Contains(err.Error(), "net::ERR_ABORTED") {
-			return err
-		}
-
-		select {
-		case <-downloadCtx.Done():
-			// browser.DownloadProgressStateCompleted が来なかった場合、新しいファイルがあったらそれを返す
+		if session.NotUseNetwork {
+			// Replay mode: find previously downloaded file
+			session.Printf("%s REPLAY DOWNLOAD: Looking for files matching %v\n", session.getDebugPrefix(), options.Glob)
 			files, err := os.ReadDir(session.DownloadPath)
 			if err != nil {
+				return RetryAndRecordError{session.DownloadPath}
+			}
+
+			// Find the first file that matches the glob pattern
+			for _, file := range files {
+				if match, _ := filepath.Match(options.Glob, file.Name()); match {
+					*filename = path.Join(session.DownloadPath, file.Name())
+					session.Printf("%s REPLAY DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+					return nil
+				}
+			}
+
+			// No matching file found
+			return RetryAndRecordError{fmt.Sprintf("%s/%s", session.DownloadPath, options.Glob)}
+		} else {
+			// Record mode: perform actual download
+			download := make(chan string)
+
+			if options.Timeout == 0 {
+				options.Timeout = 5 * time.Second
+			}
+
+			downloadCtx, cancel := context.WithTimeout(ctxt, options.Timeout)
+			defer cancel()
+
+			startTime := time.Now()
+
+			suggestedFilename := ""
+			chromedp.ListenTarget(downloadCtx, func(ev interface{}) {
+				switch ev := ev.(type) {
+				case *browser.EventDownloadWillBegin:
+					suggestedFilename = path.Join(session.DownloadPath, ev.SuggestedFilename)
+				case *browser.EventDownloadProgress:
+					switch ev.State {
+					case browser.DownloadProgressStateCompleted:
+						download <- suggestedFilename
+					case browser.DownloadProgressStateCanceled:
+						download <- ""
+					}
+				}
+			})
+			err := chromedp.Run(ctxt, actions...)
+			if err != nil && !strings.Contains(err.Error(), "net::ERR_ABORTED") {
 				return err
 			}
-			var matchErr error
-			latestTime := time.Time{}
-			for _, file := range files {
-				info, err := file.Info()
+
+			select {
+			case <-downloadCtx.Done():
+				// browser.DownloadProgressStateCompleted が来なかった場合、新しいファイルがあったらそれを返す
+				files, err := os.ReadDir(session.DownloadPath)
 				if err != nil {
 					return err
 				}
-				if !info.ModTime().Before(startTime) {
-					if match, _ := filepath.Match(options.Glob, file.Name()); match {
-						*filename = path.Join(session.DownloadPath, file.Name())
-						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
-						return nil
-					} else {
-						if info.ModTime().After(latestTime) {
-							latestTime = info.ModTime()
-							matchErr = &DownloadedFileNameNotSatisfiedError{DownloadedFilename: file.Name(), Glob: options.Glob}
+				var matchErr error
+				latestTime := time.Time{}
+				for _, file := range files {
+					info, err := file.Info()
+					if err != nil {
+						return err
+					}
+					if !info.ModTime().Before(startTime) {
+						if match, _ := filepath.Match(options.Glob, file.Name()); match {
+							*filename = path.Join(session.DownloadPath, file.Name())
+							session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+							return nil
+						} else {
+							if info.ModTime().After(latestTime) {
+								latestTime = info.ModTime()
+								matchErr = &DownloadedFileNameNotSatisfiedError{DownloadedFilename: file.Name(), Glob: options.Glob}
+							}
 						}
 					}
 				}
-			}
-			if matchErr != nil {
-				return matchErr
-			}
-			return downloadCtx.Err()
+				if matchErr != nil {
+					return matchErr
+				}
+				return downloadCtx.Err()
 
-		case downloaded := <-download:
-			if downloaded == "" {
-				return fmt.Errorf("download canceled")
-			}
-			// if downloaded filename is not match to options.Glob pattern, error
-			if match, _ := filepath.Match(options.Glob, filepath.Base(downloaded)); !match {
-				return &DownloadedFileNameNotSatisfiedError{DownloadedFilename: downloaded, Glob: options.Glob}
-			}
+			case downloaded := <-download:
+				if downloaded == "" {
+					return fmt.Errorf("download canceled")
+				}
+				// if downloaded filename is not match to options.Glob pattern, error
+				if match, _ := filepath.Match(options.Glob, filepath.Base(downloaded)); !match {
+					return &DownloadedFileNameNotSatisfiedError{DownloadedFilename: downloaded, Glob: options.Glob}
+				}
 
-			*filename = downloaded
-			session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
-			return nil
+				*filename = downloaded
+				session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+				return nil
+			}
 		}
 	}
 }
@@ -242,38 +285,74 @@ func (session *ChromeSession) SaveFile(filename *string) chromedp.ActionFunc {
 		// change extension with filename
 		fn = strings.TrimSuffix(fn, filepath.Ext(fn)) + filepath.Ext(*filename)
 
-		body, err := os.ReadFile(*filename)
-		if err != nil {
-			return err
+		if session.NotUseNetwork {
+			// Replay mode: check if saved file exists
+			if _, err := os.Stat(fn); os.IsNotExist(err) {
+				return RetryAndRecordError{fn}
+			}
+			session.Printf("%s REPLAY SAVE: file already exists %v\n", session.getDebugPrefix(), fn)
+			return nil
+		} else {
+			// Record mode: perform actual file save
+			body, err := os.ReadFile(*filename)
+			if err != nil {
+				return err
+			}
+			err = os.WriteFile(fn, body, 0644)
+			if err != nil {
+				return err
+			}
+			session.Printf("%s SAVE %v to %v (%v bytes)\n", session.getDebugPrefix(), *filename, fn, len(body))
+			return nil
 		}
-		err = os.WriteFile(fn, body, 0644)
-		if err != nil {
-			return err
-		}
-		session.Printf("%s SAVE %v to %v (%v bytes)\n", session.getDebugPrefix(), *filename, fn, len(body))
-		return nil
 	}
 }
 
 func (session *ChromeSession) actionChrome(action chromedp.Action) (*network.Response, error) {
 	var filename string
-	resp, err := chromedp.RunResponse(session.Ctx, chromedp.Tasks{
-		action,
-		session.SaveHtml(&filename),
-	})
-	if err != nil {
-		return nil, err
+
+	if session.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter and load saved HTML
+		err := session.SaveHtml(&filename).Do(session.Ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// Try to load response JSON if it exists
+		responseFilename := filename + ".response.json"
+		if jsonData, err := os.ReadFile(responseFilename); err == nil {
+			var resp network.Response
+			if json.Unmarshal(jsonData, &resp) == nil {
+				return &resp, nil
+			}
+		}
+
+		// Return dummy response if JSON not found
+		return &network.Response{Status: 200}, nil
+	} else {
+		// Record mode: perform actual action
+		resp, err := chromedp.RunResponse(session.Ctx, chromedp.Tasks{
+			action,
+			session.SaveHtml(&filename),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Save response JSON if SaveToFile is enabled
+		if session.SaveToFile {
+			responseFilename := filename + ".response.json"
+			jsonData, err := json.Marshal(resp)
+			if err == nil {
+				err = os.WriteFile(responseFilename, jsonData, 0644)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		return resp, nil
 	}
-
-	responseFilename := filename + ".response.json"
-
-	jsonData, err := json.Marshal(resp)
-	err = os.WriteFile(responseFilename, jsonData, 0644)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
 }
 
 // RunNavigate navigates to page URL and download html like Session.invoke
@@ -289,79 +368,115 @@ func (session *ChromeSession) Unmarshal(v interface{}, cssSelector string, opt U
 
 // Navigate implements UnifiedScraper.Navigate
 func (chromeSession *ChromeSession) Navigate(url string) error {
-	return chromedp.Run(chromeSession.Ctx, chromedp.Navigate(url))
+	if chromeSession.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter
+		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+	} else {
+		// Record mode: perform actual navigation
+		return chromedp.Run(chromeSession.Ctx, chromedp.Navigate(url), chromeSession.SaveHtml(nil))
+	}
 }
 
 // WaitVisible implements UnifiedScraper.WaitVisible
 func (chromeSession *ChromeSession) WaitVisible(selector string) error {
-	return chromedp.Run(chromeSession.Ctx, chromedp.WaitVisible(selector, chromedp.ByQuery))
+	if chromeSession.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter
+		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+	} else {
+		// Record mode: perform actual wait
+		return chromedp.Run(chromeSession.Ctx, chromedp.WaitVisible(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+	}
 }
 
 // SendKeys implements UnifiedScraper.SendKeys
 func (chromeSession *ChromeSession) SendKeys(selector, value string) error {
-	return chromedp.Run(chromeSession.Ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery))
+	if chromeSession.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter
+		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+	} else {
+		// Record mode: perform actual key sending
+		return chromedp.Run(chromeSession.Ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+	}
 }
 
 // Click implements UnifiedScraper.Click
 func (chromeSession *ChromeSession) Click(selector string) error {
-	return chromedp.Run(chromeSession.Ctx, chromedp.Click(selector, chromedp.ByQuery))
+	if chromeSession.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter
+		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+	} else {
+		// Record mode: perform actual click
+		return chromedp.Run(chromeSession.Ctx, chromedp.Click(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+	}
 }
 
 // SubmitForm implements UnifiedScraper.SubmitForm
 func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[string]string) error {
-	var tasks []chromedp.Action
+	if chromeSession.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter
+		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+	} else {
+		// Record mode: perform actual form submission
+		var tasks []chromedp.Action
 
-	// Fill form fields - clear first, then send keys
-	for selector, value := range params {
-		tasks = append(tasks,
-			chromedp.Clear(selector, chromedp.ByQuery),
-			chromedp.SendKeys(selector, value, chromedp.ByQuery),
-		)
-	}
-
-	// Try multiple submit strategies
-	submitSelectors := []string{
-		formSelector + " input[type=submit]",
-		formSelector + " button[type=submit]",
-		formSelector + " button:not([type])", // default button type is submit
-		formSelector + " input[type=image]",  // image submit buttons
-	}
-
-	// Try each selector until one works
-	var lastErr error
-	for _, submitSelector := range submitSelectors {
-		submitTasks := append(tasks, chromedp.Click(submitSelector, chromedp.ByQuery))
-		err := chromedp.Run(chromeSession.Ctx, submitTasks...)
-		if err == nil {
-			return nil
+		// Fill form fields - clear first, then send keys
+		for selector, value := range params {
+			tasks = append(tasks,
+				chromedp.Clear(selector, chromedp.ByQuery),
+				chromedp.SendKeys(selector, value, chromedp.ByQuery),
+			)
 		}
-		lastErr = err
-		// Continue to next selector if this one failed
-	}
 
-	// If all submit button attempts failed, try submitting via Enter key on form
-	if len(params) > 0 {
-		// Get the last field selector and try pressing Enter
-		for selector := range params {
-			enterTasks := append(tasks, chromedp.SendKeys(selector, "\n", chromedp.ByQuery))
-			err := chromedp.Run(chromeSession.Ctx, enterTasks...)
+		// Try multiple submit strategies
+		submitSelectors := []string{
+			formSelector + " input[type=submit]",
+			formSelector + " button[type=submit]",
+			formSelector + " button:not([type])", // default button type is submit
+			formSelector + " input[type=image]",  // image submit buttons
+		}
+
+		// Try each selector until one works
+		var lastErr error
+		for _, submitSelector := range submitSelectors {
+			submitTasks := append(tasks, chromedp.Click(submitSelector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+			err := chromedp.Run(chromeSession.Ctx, submitTasks...)
 			if err == nil {
 				return nil
 			}
-			break // Only try the first field
+			lastErr = err
+			// Continue to next selector if this one failed
 		}
-	}
 
-	return fmt.Errorf("failed to submit form %q: %w", formSelector, lastErr)
+		// If all submit button attempts failed, try submitting via Enter key on form
+		if len(params) > 0 {
+			// Get the last field selector and try pressing Enter
+			for selector := range params {
+				enterTasks := append(tasks, chromedp.SendKeys(selector, "\n", chromedp.ByQuery), chromeSession.SaveHtml(nil))
+				err := chromedp.Run(chromeSession.Ctx, enterTasks...)
+				if err == nil {
+					return nil
+				}
+				break // Only try the first field
+			}
+		}
+
+		return fmt.Errorf("failed to submit form %q: %w", formSelector, lastErr)
+	}
 }
 
 // FollowAnchor implements UnifiedScraper.FollowAnchor
 func (chromeSession *ChromeSession) FollowAnchor(text string) error {
-	// Use proper XPath escaping to prevent injection attacks
-	// XPath 1.0 doesn't have a built-in escape function, so we construct a concat() expression
-	escapedText := escapeXPathText(text)
-	xpath := fmt.Sprintf("//a[contains(text(), %s)]", escapedText)
-	return chromedp.Run(chromeSession.Ctx, chromedp.Click(xpath, chromedp.BySearch))
+	if chromeSession.NotUseNetwork {
+		// Replay mode: just call SaveHtml to increment counter
+		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+	} else {
+		// Record mode: perform actual anchor follow
+		// Use proper XPath escaping to prevent injection attacks
+		// XPath 1.0 doesn't have a built-in escape function, so we construct a concat() expression
+		escapedText := escapeXPathText(text)
+		xpath := fmt.Sprintf("//a[contains(text(), %s)]", escapedText)
+		return chromedp.Run(chromeSession.Ctx, chromedp.Click(xpath, chromedp.BySearch), chromeSession.SaveHtml(nil))
+	}
 }
 
 // escapeXPathText properly escapes text for use in XPath expressions
@@ -460,4 +575,17 @@ func (chromeSession *ChromeSession) ClearDebugStep() {
 // Printf implements UnifiedScraper.Printf
 func (chromeSession *ChromeSession) Printf(format string, a ...interface{}) {
 	chromeSession.Session.Printf(format, a...)
+}
+
+// Sleep implements sleep functionality with replay mode support
+func (chromeSession *ChromeSession) Sleep(duration time.Duration) error {
+	if chromeSession.NotUseNetwork {
+		// Replay mode: don't wait real time, just log
+		chromeSession.Printf("%s REPLAY SLEEP: skipping %v\n", chromeSession.getDebugPrefix(), duration)
+		return nil
+	} else {
+		// Record mode: perform actual sleep
+		chromeSession.Printf("%s SLEEP: %v\n", chromeSession.getDebugPrefix(), duration)
+		return chromedp.Run(chromeSession.Ctx, chromedp.Sleep(duration))
+	}
 }

@@ -116,14 +116,12 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 
 			body := []byte(html)
 
-			// Save HTML if SaveToFile is enabled
-			if session.SaveToFile {
-				err = os.WriteFile(fn, body, 0644)
-				if err != nil {
-					return err
-				}
-				session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
+			// Always save HTML (backward compatibility - SaveHtml traditionally always saves)
+			err = os.WriteFile(fn, body, 0644)
+			if err != nil {
+				return err
 			}
+			session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
 
 			var title string
 			err = chromedp.Title(&title).Do(ctxt)
@@ -339,15 +337,13 @@ func (session *ChromeSession) actionChrome(action chromedp.Action) (*network.Res
 			return nil, err
 		}
 
-		// Save response JSON if SaveToFile is enabled
-		if session.SaveToFile {
-			responseFilename := filename + ".response.json"
-			jsonData, err := json.Marshal(resp)
-			if err == nil {
-				err = os.WriteFile(responseFilename, jsonData, 0644)
-				if err != nil {
-					return nil, err
-				}
+		// Always save response JSON (backward compatibility)
+		responseFilename := filename + ".response.json"
+		jsonData, err := json.Marshal(resp)
+		if err == nil {
+			err = os.WriteFile(responseFilename, jsonData, 0644)
+			if err != nil {
+				return nil, err
 			}
 		}
 

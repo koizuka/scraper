@@ -316,4 +316,54 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			return
 		}
 	})
+
+	t.Run("Context cancellation in replay mode", func(t *testing.T) {
+		dir, err := os.MkdirTemp(".", "chrome_context_cancel_test*")
+		if err != nil {
+			t.Error(err)
+		}
+		defer func() { _ = os.RemoveAll(dir) }()
+
+		sessionName := "chrome_context_cancel_test"
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
+		if err != nil {
+			t.Error(err)
+		}
+
+		logger := BufferedLogger{}
+		session := NewSession(sessionName, &logger)
+		session.FilePrefix = dir + "/"
+		session.NotUseNetwork = true // Enable replay mode
+
+		chromeSession := &ChromeSession{Session: session}
+
+		// Create a cancelled context
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Immediately cancel
+
+		// Create mock HTML file
+		session.invokeCount = 1
+		htmlFile := session.getHtmlFilename()
+		err = os.WriteFile(htmlFile, []byte("<html><body>test</body></html>"), 0644)
+		if err != nil {
+			t.Error(err)
+		}
+
+		// Reset counter
+		session.invokeCount = 0
+
+		// SaveHtml should work in replay mode even with cancelled context
+		// because it doesn't perform browser operations
+		action := chromeSession.SaveHtml(nil)
+		err = action.Do(ctx)
+		if err != nil {
+			t.Errorf("SaveHtml should work in replay mode even with cancelled context: %v", err)
+			return
+		}
+
+		if session.invokeCount != 1 {
+			t.Errorf("Expected invokeCount 1, got %d", session.invokeCount)
+			return
+		}
+	})
 }

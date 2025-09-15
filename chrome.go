@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+// File permission constants
+const (
+	DefaultFilePermission = 0644 // Read/write for owner, read for group and others
+	DefaultDirPermission  = 0755 // Read/write/execute for owner, read/execute for group and others
+)
+
 type ChromeSession struct {
 	*Session
 	Ctx          context.Context
@@ -52,7 +58,7 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		return nil, func() {}, err
 	}
 
-	err = os.MkdirAll(downloadPath, 0777)
+	err = os.MkdirAll(downloadPath, DefaultDirPermission)
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("couldn't create directory: %v", downloadPath)
 	}
@@ -117,7 +123,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 			body := []byte(html)
 
 			// Always save HTML (backward compatibility - SaveHtml traditionally always saves)
-			err = os.WriteFile(fn, body, 0644)
+			err = os.WriteFile(fn, body, DefaultFilePermission)
 			if err != nil {
 				return err
 			}
@@ -150,7 +156,7 @@ func (e *DownloadedFileNameNotSatisfiedError) Error() string {
 func (session *ChromeSession) DownloadFile(filename *string, options DownloadFileOptions, actions ...chromedp.Action) chromedp.ActionFunc {
 	return func(ctxt context.Context) error {
 		if filename == nil {
-			return fmt.Errorf("filename is nil")
+			return fmt.Errorf("filename parameter cannot be nil in DownloadFile")
 		}
 
 		if options.Glob == "" {
@@ -184,8 +190,8 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 				}
 			}
 
-			// No matching file found
-			return RetryAndRecordError{fmt.Sprintf("%s/%s", session.DownloadPath, options.Glob)}
+			// No matching file found in replay mode
+			return RetryAndRecordError{fmt.Sprintf("no files matching pattern '%s' found in download directory '%s' for replay mode", options.Glob, session.DownloadPath)}
 		} else {
 			// Record mode: perform actual download
 			download := make(chan string)
@@ -275,7 +281,7 @@ func (session *ChromeSession) SaveFile(filename *string) chromedp.ActionFunc {
 	return func(ctx context.Context) error {
 		session.invokeCount++
 		if filename == nil {
-			return fmt.Errorf("filename is nil")
+			return fmt.Errorf("filename parameter cannot be nil in SaveFile")
 		}
 
 		fn := session.getHtmlFilename()
@@ -296,7 +302,7 @@ func (session *ChromeSession) SaveFile(filename *string) chromedp.ActionFunc {
 			if err != nil {
 				return err
 			}
-			err = os.WriteFile(fn, body, 0644)
+			err = os.WriteFile(fn, body, DefaultFilePermission)
 			if err != nil {
 				return err
 			}
@@ -341,7 +347,7 @@ func (session *ChromeSession) actionChrome(action chromedp.Action) (*network.Res
 		responseFilename := filename + ".response.json"
 		jsonData, err := json.Marshal(resp)
 		if err == nil {
-			err = os.WriteFile(responseFilename, jsonData, 0644)
+			err = os.WriteFile(responseFilename, jsonData, DefaultFilePermission)
 			if err != nil {
 				return nil, err
 			}
@@ -573,7 +579,9 @@ func (chromeSession *ChromeSession) Printf(format string, a ...interface{}) {
 	chromeSession.Session.Printf(format, a...)
 }
 
-// Sleep implements sleep functionality with replay mode support
+// Sleep waits for the specified duration in record mode, or skips waiting in replay mode.
+// In replay mode, this method returns immediately without actual waiting, which speeds up test execution.
+// In record mode, this method performs the actual sleep operation using chromedp.Sleep.
 func (chromeSession *ChromeSession) Sleep(duration time.Duration) error {
 	if chromeSession.NotUseNetwork {
 		// Replay mode: don't wait real time, just log

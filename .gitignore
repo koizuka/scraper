@@ -1,3 +1,9 @@
 /.idea/
 chromeUserData
 chrome_test/chrome/example.txt
+
+# Test generated files and directories
+test/
+test_*/
+*_test/
+session_test*/

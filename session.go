@@ -154,7 +154,6 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 	session.invokeCount++
 	filename := session.getHtmlFilename()
-	contentTypeFilename := filename + ".ContentType"
 
 	if session.ShowRequestHeader {
 		session.Printf("REQUEST: %v %v:\n", req.Method, req.URL.String())
@@ -216,7 +215,12 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 				return nil, err
 			}
 
-			err = os.WriteFile(contentTypeFilename, []byte(contentType), os.FileMode(0644))
+			// Save metadata to unified file
+			metadata := PageMetadata{
+				URL:         req.URL.String(),
+				ContentType: contentType,
+			}
+			err = savePageMetadata(filename, metadata)
 			if err != nil {
 				return nil, err
 			}
@@ -230,11 +234,17 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 			return nil, RetryAndRecordError{filename}
 		}
 
-		ct, err := os.ReadFile(contentTypeFilename)
+		// Load metadata from unified file
+		metadata, err := loadPageMetadata(filename)
 		if err != nil {
 			return nil, RetryAndRecordError{filename}
 		}
-		contentType = string(ct)
+		contentType = metadata.ContentType
+
+		// Parse the saved URL and update request URL for proper replay
+		if savedURL, parseErr := url.Parse(metadata.URL); parseErr == nil {
+			req.URL = savedURL
+		}
 	}
 
 	if session.ShowResponseHeader {
@@ -280,12 +290,31 @@ func (session *Session) ApplyRefresh(page *Page, maxRedirect int) (*Page, error)
 			return session.GetPageMaxRedirect(newUrl.String(), maxRedirect-1)
 		}
 	}
+	session.mu.Lock()
+	session.currentPage = page
+	session.mu.Unlock()
 	return page, nil
 }
 
 // GetPage gets the URL and returns a Page.
 func (session *Session) GetPage(getUrl string) (*Page, error) {
 	return session.GetPageMaxRedirect(getUrl, 1)
+}
+
+// GetCurrentURL returns the current page URL
+func (session *Session) GetCurrentURL() (string, error) {
+	session.mu.RLock()
+	defer session.mu.RUnlock()
+
+	if session.currentPage == nil || session.currentPage.BaseUrl == nil {
+		return "", fmt.Errorf("no current page available")
+	}
+
+	currentURL := session.currentPage.BaseUrl.String()
+	if session.ShowResponseHeader {
+		session.Printf("Current URL: %s", currentURL)
+	}
+	return currentURL, nil
 }
 
 // FormAction submits a form (easy version)

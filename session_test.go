@@ -133,9 +133,12 @@ func TestSession_DebugStep(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Create content type file
-		contentTypeFile := testFile + ".ContentType"
-		err = os.WriteFile(contentTypeFile, []byte("text/html"), 0644)
+		// Create metadata file using helper function
+		metadata := PageMetadata{
+			URL:         "http://example.com",
+			ContentType: "text/html",
+		}
+		err = savePageMetadata(testFile, metadata)
 		if err != nil {
 			t.Fatal(err)
 		}

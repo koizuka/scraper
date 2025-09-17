@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+const MetadataFileExtension = ".meta"
+
 // PageMetadata holds metadata for saved pages
 type PageMetadata struct {
 	URL         string `json:"url"`
@@ -15,7 +17,7 @@ type PageMetadata struct {
 
 // savePageMetadata saves metadata to a .meta file
 func savePageMetadata(filename string, metadata PageMetadata) error {
-	metadataFilename := filename + ".meta"
+	metadataFilename := filename + MetadataFileExtension
 	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %v", err)
@@ -30,7 +32,7 @@ func savePageMetadata(filename string, metadata PageMetadata) error {
 // loadPageMetadata loads metadata from a .meta file
 func loadPageMetadata(filename string) (PageMetadata, error) {
 	var metadata PageMetadata
-	metadataFilename := filename + ".meta"
+	metadataFilename := filename + MetadataFileExtension
 	metadataBytes, err := os.ReadFile(metadataFilename)
 	if err != nil {
 		return metadata, fmt.Errorf("failed to read metadata file %s: %v", metadataFilename, err)

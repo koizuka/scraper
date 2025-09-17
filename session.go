@@ -311,7 +311,9 @@ func (session *Session) GetCurrentURL() (string, error) {
 	}
 
 	currentURL := session.currentPage.BaseUrl.String()
-	session.Printf("Current URL: %s", currentURL)
+	if session.ShowResponseHeader {
+		session.Printf("Current URL: %s", currentURL)
+	}
 	return currentURL, nil
 }
 

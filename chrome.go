@@ -398,7 +398,9 @@ func (session *ChromeSession) GetCurrentURL() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to load metadata: %v", err)
 		}
-		session.Printf("Current URL (replay): %s", metadata.URL)
+		if session.ShowResponseHeader {
+			session.Printf("Current URL (replay): %s", metadata.URL)
+		}
 		return metadata.URL, nil
 	} else {
 		// Live mode: get URL from browser
@@ -409,7 +411,9 @@ func (session *ChromeSession) GetCurrentURL() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get current URL: %v", err)
 		}
-		session.Printf("Current URL: %s", currentURL)
+		if session.ShowResponseHeader {
+			session.Printf("Current URL: %s", currentURL)
+		}
 		return currentURL, nil
 	}
 }

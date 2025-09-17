@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	cookiejar "github.com/orirawlings/persistent-cookiejar"
@@ -21,6 +22,43 @@ const (
 	UserAgent_firefox86 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:86.0) Gecko/20100101 Firefox/86.0"
 	UserAgent_default   = UserAgent_firefox86
 )
+
+// PageMetadata holds metadata for saved pages
+type PageMetadata struct {
+	URL         string `json:"url"`
+	ContentType string `json:"content_type"`
+	Title       string `json:"title,omitempty"`
+}
+
+// savePageMetadata saves metadata to a .meta file
+func savePageMetadata(filename string, metadata PageMetadata) error {
+	metadataFilename := filename + ".meta"
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %v", err)
+	}
+	err = os.WriteFile(metadataFilename, metadataBytes, os.FileMode(0644))
+	if err != nil {
+		return fmt.Errorf("failed to write metadata file %s: %v", metadataFilename, err)
+	}
+	return nil
+}
+
+// loadPageMetadata loads metadata from a .meta file
+func loadPageMetadata(filename string) (PageMetadata, error) {
+	var metadata PageMetadata
+	metadataFilename := filename + ".meta"
+	metadataBytes, err := os.ReadFile(metadataFilename)
+	if err != nil {
+		return metadata, fmt.Errorf("failed to read metadata file %s: %v", metadataFilename, err)
+	}
+
+	err = json.Unmarshal(metadataBytes, &metadata)
+	if err != nil {
+		return metadata, fmt.Errorf("failed to parse metadata file %s: %v", metadataFilename, err)
+	}
+	return metadata, nil
+}
 
 // Session holds communication and logging options
 type Session struct {
@@ -154,7 +192,6 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 	session.invokeCount++
 	filename := session.getHtmlFilename()
-	contentTypeFilename := filename + ".ContentType"
 
 	if session.ShowRequestHeader {
 		session.Printf("REQUEST: %v %v:\n", req.Method, req.URL.String())
@@ -216,7 +253,12 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 				return nil, err
 			}
 
-			err = os.WriteFile(contentTypeFilename, []byte(contentType), os.FileMode(0644))
+			// Save metadata to unified file
+			metadata := PageMetadata{
+				URL:         req.URL.String(),
+				ContentType: contentType,
+			}
+			err = savePageMetadata(filename, metadata)
 			if err != nil {
 				return nil, err
 			}
@@ -230,11 +272,17 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 			return nil, RetryAndRecordError{filename}
 		}
 
-		ct, err := os.ReadFile(contentTypeFilename)
+		// Load metadata from unified file
+		metadata, err := loadPageMetadata(filename)
 		if err != nil {
 			return nil, RetryAndRecordError{filename}
 		}
-		contentType = string(ct)
+		contentType = metadata.ContentType
+
+		// Parse the saved URL and update request URL for proper replay
+		if savedURL, parseErr := url.Parse(metadata.URL); parseErr == nil {
+			req.URL = savedURL
+		}
 	}
 
 	if session.ShowResponseHeader {
@@ -280,12 +328,29 @@ func (session *Session) ApplyRefresh(page *Page, maxRedirect int) (*Page, error)
 			return session.GetPageMaxRedirect(newUrl.String(), maxRedirect-1)
 		}
 	}
+	session.mu.Lock()
+	session.currentPage = page
+	session.mu.Unlock()
 	return page, nil
 }
 
 // GetPage gets the URL and returns a Page.
 func (session *Session) GetPage(getUrl string) (*Page, error) {
 	return session.GetPageMaxRedirect(getUrl, 1)
+}
+
+// GetCurrentURL returns the current page URL
+func (session *Session) GetCurrentURL() (string, error) {
+	session.mu.RLock()
+	defer session.mu.RUnlock()
+
+	if session.currentPage == nil || session.currentPage.BaseUrl == nil {
+		return "", fmt.Errorf("no current page available")
+	}
+
+	currentURL := session.currentPage.BaseUrl.String()
+	session.Printf("Current URL: %s", currentURL)
+	return currentURL, nil
 }
 
 // FormAction submits a form (easy version)

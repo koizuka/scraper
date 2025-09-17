@@ -129,10 +129,30 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 			}
 			session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
 
+			// Save metadata for replay mode
+			var currentURL string
 			var title string
+			err = chromedp.Evaluate(`window.location.href`, &currentURL).Do(ctxt)
+			if err != nil {
+				session.Printf("Warning: failed to get current URL: %v", err)
+			}
+
 			err = chromedp.Title(&title).Do(ctxt)
-			if err == nil {
+			if err != nil {
+				session.Printf("Warning: failed to get title: %v", err)
+			} else {
 				session.Printf("* %v\n", title)
+			}
+
+			// Save unified metadata
+			metadata := PageMetadata{
+				URL:         currentURL,
+				ContentType: "text/html", // Chrome pages are typically HTML
+				Title:       title,
+			}
+			err = savePageMetadata(fn, metadata)
+			if err != nil {
+				session.Printf("Warning: failed to save metadata: %v", err)
 			}
 			return nil
 		}
@@ -364,6 +384,34 @@ func (session *ChromeSession) RunNavigate(URL string) (*network.Response, error)
 
 func (session *ChromeSession) Unmarshal(v interface{}, cssSelector string, opt UnmarshalOption) error {
 	return ChromeUnmarshal(session.Ctx, v, cssSelector, opt)
+}
+
+// GetCurrentURL returns the current page URL
+func (session *ChromeSession) GetCurrentURL() (string, error) {
+	if session.NotUseNetwork {
+		// Replay mode: load URL from saved metadata file
+		// Use current invokeCount to get the right filename
+		fn := fmt.Sprintf("%v/%v.html", session.getDirectory(), session.invokeCount)
+
+		// Load unified metadata file
+		metadata, err := loadPageMetadata(fn)
+		if err != nil {
+			return "", fmt.Errorf("failed to load metadata: %v", err)
+		}
+		session.Printf("Current URL (replay): %s", metadata.URL)
+		return metadata.URL, nil
+	} else {
+		// Live mode: get URL from browser
+		var currentURL string
+		err := chromedp.Run(session.Ctx,
+			chromedp.Evaluate(`window.location.href`, &currentURL),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to get current URL: %v", err)
+		}
+		session.Printf("Current URL: %s", currentURL)
+		return currentURL, nil
+	}
 }
 
 // UnifiedScraper interface implementation for ChromeSession

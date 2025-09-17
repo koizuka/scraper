@@ -1,7 +1,6 @@
 package scraper
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -134,17 +133,12 @@ func TestSession_DebugStep(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Create metadata file
-		metadataFile := testFile + ".meta"
+		// Create metadata file using helper function
 		metadata := PageMetadata{
 			URL:         "http://example.com",
 			ContentType: "text/html",
 		}
-		metadataBytes, err := json.Marshal(metadata)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = os.WriteFile(metadataFile, metadataBytes, 0644)
+		err = savePageMetadata(testFile, metadata)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -302,21 +302,6 @@ func (session *Session) GetPage(getUrl string) (*Page, error) {
 	return session.GetPageMaxRedirect(getUrl, 1)
 }
 
-// GetCurrentURL returns the current page URL
-func (session *Session) GetCurrentURL() (string, error) {
-	session.mu.RLock()
-	defer session.mu.RUnlock()
-
-	if session.currentPage == nil || session.currentPage.BaseUrl == nil {
-		return "", fmt.Errorf("no current page available")
-	}
-
-	currentURL := session.currentPage.BaseUrl.String()
-	if session.ShowResponseHeader {
-		session.Printf("Current URL: %s", currentURL)
-	}
-	return currentURL, nil
-}
 
 // FormAction submits a form (easy version)
 func (session *Session) FormAction(page *Page, formSelector string, params map[string]string) (*Response, error) {
@@ -450,8 +435,8 @@ func (session *Session) GetCurrentURL() (string, error) {
 		return "", fmt.Errorf("session: no current page available")
 	}
 
-	if currentPage.response != nil && currentPage.response.Request != nil {
-		return currentPage.response.Request.URL.String(), nil
+	if currentPage.BaseUrl != nil {
+		return currentPage.BaseUrl.String(), nil
 	}
 
 	return "", fmt.Errorf("session: no URL information available")
@@ -590,9 +575,9 @@ func (session *Session) savePageAction() error {
 
 	body := []byte(html)
 
-	// Apply body filter if set
+	// Apply body filter if set (Note: no Response available in unified actions for HTTP scraping)
 	if session.BodyFilter != nil {
-		filteredBody, err := session.BodyFilter(session.currentPage.response, body)
+		filteredBody, err := session.BodyFilter(nil, body)
 		if err != nil {
 			return fmt.Errorf("session: body filter error: %w", err)
 		}

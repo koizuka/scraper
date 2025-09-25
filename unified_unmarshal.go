@@ -35,18 +35,12 @@ func UnifiedUnmarshalFromSelection(selection *goquery.Selection, v interface{}, 
 	return Unmarshal(v, selection, opt)
 }
 
-// ExtractData is a convenience function that combines navigation and data extraction
+// ExtractDataFromURL is a convenience function that combines navigation and data extraction
 // in a single call, working with both scraper types.
-func ExtractData(scraper UnifiedScraper, url string, selector string, v interface{}, opt UnmarshalOption) error {
-	err := scraper.Navigate(url)
-	if err != nil {
-		return err
-	}
-
-	err = scraper.WaitVisible(selector)
-	if err != nil {
-		return err
-	}
-
-	return scraper.ExtractData(v, selector, opt)
+func ExtractDataFromURL(scraper UnifiedScraper, url string, selector string, v interface{}, opt UnmarshalOption) error {
+	return scraper.Run(
+		Navigate(url),
+		WaitVisible(selector),
+		ExtractData(v, selector, opt),
+	)
 }

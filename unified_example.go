@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// ExampleUnifiedScraping demonstrates how to use the unified scraper interface
+// ExampleUnifiedScraping demonstrates how to use the unified Action-based scraper interface
 // to write code that works with both HTTP-based and Chrome-based scraping.
 func ExampleUnifiedScraping() {
 	var logger ConsoleLogger
@@ -33,29 +33,24 @@ func ExampleUnifiedScraping() {
 	}
 }
 
-// demonstrateUnifiedAPI shows how the same code works with both scraper types
+// demonstrateUnifiedAPI shows how the same Action-based code works with both scraper types
 func demonstrateUnifiedAPI(scraper UnifiedScraper) error {
 	scraper.SetDebugStep("Demo")
 	defer scraper.ClearDebugStep()
 
-	// Navigate to a page
-	if err := scraper.Navigate("https://example.com"); err != nil {
-		return fmt.Errorf("navigation failed: %w", err)
-	}
-
-	// Wait for content to be visible (no-op for HTTP, important for Chrome)
-	if err := scraper.WaitVisible("h1"); err != nil {
-		return fmt.Errorf("wait visible failed: %w", err)
-	}
-
-	// Save the current page
-	filename, err := scraper.SavePage()
+	// Use the new Action-based API - chromedp.Run() style!
+	err := scraper.Run(
+		Navigate("https://example.com"),
+		WaitVisible("h1"), // no-op for HTTP, important for Chrome
+		SavePage(),
+	)
 	if err != nil {
-		return fmt.Errorf("save page failed: %w", err)
+		return fmt.Errorf("navigation and page save failed: %w", err)
 	}
-	scraper.Printf("Page saved to: %s", filename)
 
-	// Extract data using the unified interface
+	scraper.Printf("Page loaded and saved successfully")
+
+	// Extract data from the page using Action API
 	type PageData struct {
 		Title string `find:"h1"`
 		Links []struct {
@@ -65,7 +60,10 @@ func demonstrateUnifiedAPI(scraper UnifiedScraper) error {
 	}
 
 	var data PageData
-	if err := scraper.ExtractData(&data, "body", UnmarshalOption{}); err != nil {
+	err = scraper.Run(
+		ExtractData(&data, "body", UnmarshalOption{}),
+	)
+	if err != nil {
 		return fmt.Errorf("data extraction failed: %w", err)
 	}
 
@@ -105,30 +103,20 @@ func ExampleSwitchableScraper(useChrome bool) {
 	}
 }
 
-// ExampleFormAutomation shows unified form handling
+// ExampleFormAutomation shows unified form handling with Action API
 func ExampleFormAutomation(scraper UnifiedScraper) error {
-	// Navigate to login page
-	if err := scraper.Navigate("https://example.com/login"); err != nil {
-		return err
-	}
-
-	// Fill form fields
-	if err := scraper.SendKeys("input[name=username]", "user@example.com"); err != nil {
-		return err
-	}
-
-	if err := scraper.SendKeys("input[name=password]", "password123"); err != nil {
-		return err
-	}
-
-	// Submit form
-	if err := scraper.SubmitForm("form[name=login]", nil); err != nil {
-		return err
-	}
-
-	// Wait for redirect/response
-	if err := scraper.WaitVisible(".dashboard"); err != nil {
-		return err
+	// Navigate and fill form using Action chain
+	err := scraper.Run(
+		Navigate("https://example.com/login"),
+		WaitVisible("form[name=login]"),
+		SendKeys("input[name=username]", "user@example.com"),
+		SendKeys("input[name=password]", "password123"),
+		Click("input[type=submit]"), // Submit by clicking submit button
+		Sleep(2*time.Second),         // Wait for form submission
+		WaitVisible(".dashboard"),    // Wait for successful login
+	)
+	if err != nil {
+		return fmt.Errorf("form automation failed: %w", err)
 	}
 
 	scraper.Printf("Login successful!")
@@ -137,11 +125,7 @@ func ExampleFormAutomation(scraper UnifiedScraper) error {
 
 // ExampleDataExtraction demonstrates advanced data extraction patterns
 func ExampleDataExtraction(scraper UnifiedScraper, url string) error {
-	if err := scraper.Navigate(url); err != nil {
-		return err
-	}
-
-	// Example: Extract product information
+	// Navigate and extract in one chain
 	type Product struct {
 		Name        string   `find:".product-name"`
 		Price       float64  `find:".price" re:"([0-9.]+)"`
@@ -151,7 +135,12 @@ func ExampleDataExtraction(scraper UnifiedScraper, url string) error {
 	}
 
 	var products []Product
-	if err := scraper.ExtractData(&products, ".product-item", UnmarshalOption{}); err != nil {
+	err := scraper.Run(
+		Navigate(url),
+		WaitVisible(".product-list"),
+		ExtractData(&products, ".product-item", UnmarshalOption{}),
+	)
+	if err != nil {
 		return fmt.Errorf("product extraction failed: %w", err)
 	}
 
@@ -163,30 +152,95 @@ func ExampleDataExtraction(scraper UnifiedScraper, url string) error {
 	return nil
 }
 
-// ExampleFileDownload shows how to handle downloads with the unified interface
-func ExampleFileDownload(scraper UnifiedScraper) error {
-	if err := scraper.Navigate("https://example.com/download"); err != nil {
-		return err
-	}
-
-	// Click download link
-	if err := scraper.Click(".download-button"); err != nil {
-		return err
-	}
-
-	// Try to download resource (implementation varies by scraper type)
-	filename, err := scraper.DownloadResource(UnifiedDownloadOptions{
-		Timeout: 30 * time.Second,
-		Glob:    "*.pdf",
-	})
-
+// ExampleConditionalActions shows how to handle conditional logic with Action API
+func ExampleConditionalActions(scraper UnifiedScraper) error {
+	// First navigate to the page
+	err := scraper.Run(
+		Navigate("https://example.com/login"),
+		SavePage(),
+	)
 	if err != nil {
-		// For Chrome scraping, you might need to use the specific DownloadFile method
-		scraper.Printf("Download via unified interface failed: %v", err)
-		scraper.Printf("For Chrome scraping, use chromeSession.DownloadFile() for more control")
 		return err
 	}
 
-	scraper.Printf("Downloaded file: %s", filename)
+	// Check current URL to decide what to do next
+	currentURL, err := scraper.GetCurrentURL()
+	if err != nil {
+		return err
+	}
+
+	scraper.Printf("Current URL: %s", currentURL)
+
+	// Conditional actions based on URL
+	if currentURL == "https://login.example.com" {
+		// Already logged in - different page
+		return scraper.Run(
+			WaitVisible(".dashboard"),
+			SavePage(),
+		)
+	} else {
+		// Need to login
+		return scraper.Run(
+			WaitVisible("form[name=login]"),
+			SendKeys("input[name=username]", "user@example.com"),
+			SendKeys("input[name=password]", "password123"),
+			Click("input[type=submit]"),
+			Sleep(2*time.Second),
+			SavePage(),
+		)
+	}
+}
+
+// ExampleCustomAction shows how to create reusable custom actions
+func LoginAction(username, password string) UnifiedAction {
+	return ActionFunc(func(scraper UnifiedScraper) error {
+		return scraper.Run(
+			Navigate("https://example.com/login"),
+			WaitVisible("form[name=login]"),
+			SendKeys("input[name=username]", username),
+			SendKeys("input[name=password]", password),
+			Click("input[type=submit]"),
+			Sleep(2*time.Second),
+		)
+	})
+}
+
+// ExampleCustomActionUsage demonstrates using custom actions
+func ExampleCustomActionUsage(scraper UnifiedScraper) error {
+	// Use custom action in a chain
+	err := scraper.Run(
+		LoginAction("user@example.com", "password123"),
+		WaitVisible(".dashboard"),
+		SavePage(),
+	)
+	if err != nil {
+		return fmt.Errorf("custom action failed: %w", err)
+	}
+
+	scraper.Printf("Custom action completed successfully!")
+	return nil
+}
+
+// ExampleReplayModeDemo shows how the new API handles replay mode automatically
+func ExampleReplayModeDemo(scraper UnifiedScraper) error {
+	// Sleep will automatically be skipped in replay mode
+	err := scraper.Run(
+		Navigate("https://example.com"),
+		Sleep(5*time.Second), // This will be fast in replay mode
+		WaitVisible("h1"),
+		Sleep(2*time.Second), // This too
+		SavePage(),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Check if we're in replay mode
+	if scraper.IsReplayMode() {
+		scraper.Printf("Running in replay mode - sleeps were skipped!")
+	} else {
+		scraper.Printf("Running in record mode - sleeps were executed")
+	}
+
 	return nil
 }

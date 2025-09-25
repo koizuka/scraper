@@ -24,9 +24,9 @@ func TestThreadSafetyFormData(t *testing.T) {
 	session.FilePrefix = tmpDir + "/"
 
 	// Navigate once
-	_, err := session.GetPage(server.URL)
+	err := session.Navigate(server.URL)
 	if err != nil {
-		t.Fatalf("GetPage() error = %v", err)
+		t.Fatalf("Navigate() error = %v", err)
 	}
 
 	// Test concurrent SendKeys operations
@@ -78,9 +78,9 @@ func TestThreadSafetyCurrentPage(t *testing.T) {
 	session.FilePrefix = tmpDir + "/"
 
 	// Navigate once
-	_, err := session.GetPage(server.URL)
+	err := session.Navigate(server.URL)
 	if err != nil {
-		t.Fatalf("GetPage() error = %v", err)
+		t.Fatalf("Navigate() error = %v", err)
 	}
 
 	// Test concurrent access to currentPage through different operations
@@ -153,9 +153,9 @@ func TestMemoryLeakPrevention(t *testing.T) {
 	session.FilePrefix = tmpDir + "/"
 
 	// Navigate to the form page
-	_, err := session.GetPage(server.URL)
+	err := session.Navigate(server.URL)
 	if err != nil {
-		t.Fatalf("GetPage() error = %v", err)
+		t.Fatalf("Navigate() error = %v", err)
 	}
 
 	// Add form data
@@ -221,9 +221,9 @@ func TestConcurrentFormSubmissions(t *testing.T) {
 	session.FilePrefix = tmpDir + "/"
 
 	// Navigate to the form page
-	_, err := session.GetPage(server.URL)
+	err := session.Navigate(server.URL)
 	if err != nil {
-		t.Fatalf("GetPage() error = %v", err)
+		t.Fatalf("Navigate() error = %v", err)
 	}
 
 	// Test concurrent form submissions

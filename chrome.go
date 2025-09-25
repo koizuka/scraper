@@ -565,3 +565,46 @@ func (chromeSession *ChromeSession) ClearDebugStep() {
 func (chromeSession *ChromeSession) Printf(format string, a ...interface{}) {
 	chromeSession.Session.Printf(format, a...)
 }
+
+// Backward compatibility methods for ChromeSession
+// These methods wrap the new Action-based API to maintain existing behavior
+
+// Navigate navigates to the specified URL (backward compatibility)
+func (chromeSession *ChromeSession) Navigate(url string) error {
+	return chromeSession.Run(Navigate(url))
+}
+
+// WaitVisible waits for an element to be visible (backward compatibility)
+func (chromeSession *ChromeSession) WaitVisible(selector string) error {
+	return chromeSession.Run(WaitVisible(selector))
+}
+
+// Click clicks on an element (backward compatibility)
+func (chromeSession *ChromeSession) Click(selector string) error {
+	return chromeSession.Run(Click(selector))
+}
+
+// SendKeys sends keystrokes to an element (backward compatibility)
+func (chromeSession *ChromeSession) SendKeys(selector, keys string) error {
+	return chromeSession.Run(SendKeys(selector, keys))
+}
+
+// Sleep sleeps for the specified duration (backward compatibility)
+func (chromeSession *ChromeSession) Sleep(duration time.Duration) error {
+	return chromeSession.Run(Sleep(duration))
+}
+
+// SavePage saves the current page (backward compatibility)
+func (chromeSession *ChromeSession) SavePage() (string, error) {
+	// For backward compatibility, we need to implement this directly
+	// since the Action-based SavePage() doesn't return filename
+	filename := chromeSession.getHtmlFilename()
+	action := chromeSession.SaveHtml(nil)
+	err := chromedp.Run(chromeSession.Ctx, action)
+	return filename, err
+}
+
+// ExtractData extracts data from the current page (backward compatibility)
+func (chromeSession *ChromeSession) ExtractData(v interface{}, selector string, opt UnmarshalOption) error {
+	return chromeSession.Run(ExtractData(v, selector, opt))
+}

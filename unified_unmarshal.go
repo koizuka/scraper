@@ -10,7 +10,7 @@ import (
 // with both traditional HTTP-based scraping and Chrome-based browser automation.
 // It automatically detects the scraper type and uses the appropriate unmarshal function.
 func UnifiedUnmarshal(scraper UnifiedScraper, v interface{}, selector string, opt UnmarshalOption) error {
-	return scraper.ExtractData(v, selector, opt)
+	return scraper.Run(ExtractData(v, selector, opt))
 }
 
 // UnifiedUnmarshalWithContext allows specifying a context for Chrome-based unmarshal operations.
@@ -22,7 +22,7 @@ func UnifiedUnmarshalWithContext(ctx context.Context, scraper UnifiedScraper, v 
 		return ChromeUnmarshal(ctx, v, selector, opt)
 	case *Session:
 		// Use traditional unmarshal - context is ignored
-		return scraper.ExtractData(v, selector, opt)
+		return scraper.Run(ExtractData(v, selector, opt))
 	default:
 		return errors.New("unsupported scraper type")
 	}

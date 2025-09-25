@@ -869,3 +869,15 @@ func extractNameFromSelector(selector string) string {
 // SetDebugStep implements UnifiedScraper.SetDebugStep - already exists
 
 // ClearDebugStep implements UnifiedScraper.ClearDebugStep - already exists
+
+// Backward compatibility methods for Session
+
+// Navigate navigates to the specified URL (backward compatibility)
+func (session *Session) Navigate(url string) error {
+	return session.Run(Navigate(url))
+}
+
+// Sleep sleeps for the specified duration (backward compatibility)
+func (session *Session) Sleep(duration time.Duration) error {
+	return session.Run(Sleep(duration))
+}

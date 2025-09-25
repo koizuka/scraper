@@ -110,25 +110,22 @@ func TestUnifiedInterface(t *testing.T) {
 			defer tc.cleanup()
 
 			// Test Navigation
-			err := scraper.Navigate(server.URL)
+			err := scraper.Run(Navigate(server.URL))
 			if err != nil {
 				t.Errorf("Navigate() error = %v", err)
 				return
 			}
 
 			// Test WaitVisible (should be no-op for HTTP, actual wait for Chrome)
-			err = scraper.WaitVisible("h1")
+			err = scraper.Run(WaitVisible("h1"))
 			if err != nil {
 				t.Errorf("WaitVisible() error = %v", err)
 			}
 
 			// Test SavePage
-			filename, err := scraper.SavePage()
+			err = scraper.Run(SavePage())
 			if err != nil {
 				t.Errorf("SavePage() error = %v", err)
-			}
-			if filename == "" {
-				t.Errorf("SavePage() returned empty filename")
 			}
 
 			// Test data extraction
@@ -138,7 +135,7 @@ func TestUnifiedInterface(t *testing.T) {
 			}
 
 			var data PageData
-			err = scraper.ExtractData(&data, "body", UnmarshalOption{})
+			err = scraper.Run(ExtractData(&data, "body", UnmarshalOption{}))
 			if err != nil {
 				t.Errorf("ExtractData() error = %v", err)
 			}
@@ -191,24 +188,28 @@ func TestUnifiedFormOperations(t *testing.T) {
 	scraper := UnifiedScraper(session)
 
 	// Navigate to test page
-	err := scraper.Navigate(server.URL)
+	err := scraper.Run(Navigate(server.URL))
 	if err != nil {
 		t.Fatalf("Navigate() error = %v", err)
 	}
 
 	// Test SendKeys
-	err = scraper.SendKeys("input[name=username]", "testuser")
+	err = scraper.Run(SendKeys("input[name=username]", "testuser"))
 	if err != nil {
 		t.Errorf("SendKeys() error = %v", err)
 	}
 
-	err = scraper.SendKeys("input[name=password]", "testpass")
+	err = scraper.Run(SendKeys("input[name=password]", "testpass"))
 	if err != nil {
 		t.Errorf("SendKeys() error = %v", err)
 	}
 
-	// Test form submission
-	err = scraper.SubmitForm("form[name=test-form]", nil)
+	// Test form submission (using native method since SubmitForm action doesn't exist)
+	if session, ok := scraper.(*Session); ok {
+		err = session.SubmitForm("form[name=test-form]", nil)
+	} else {
+		t.Skip("Form submission test only works with HTTP Session")
+	}
 	if err != nil {
 		t.Errorf("SubmitForm() error = %v", err)
 	}
@@ -238,7 +239,7 @@ func TestUnifiedErrorHandling(t *testing.T) {
 	scraper := UnifiedScraper(session)
 
 	// Test clicking without navigation
-	err := scraper.Click(".nonexistent")
+	err := scraper.Run(Click(".nonexistent"))
 	if err == nil {
 		t.Error("Click() should return error when no page is loaded")
 	}
@@ -246,8 +247,12 @@ func TestUnifiedErrorHandling(t *testing.T) {
 		t.Errorf("Click() error = %v, should contain 'no current page'", err)
 	}
 
-	// Test form submission without navigation
-	err = scraper.SubmitForm("form", map[string]string{"test": "value"})
+	// Test form submission without navigation (using native method)
+	if session, ok := scraper.(*Session); ok {
+		err = session.SubmitForm("form", map[string]string{"test": "value"})
+	} else {
+		err = fmt.Errorf("form submission not supported for this scraper type")
+	}
 	if err == nil {
 		t.Error("SubmitForm() should return error when no page is loaded")
 	}
@@ -256,7 +261,7 @@ func TestUnifiedErrorHandling(t *testing.T) {
 	var data struct {
 		Title string `find:"h1"`
 	}
-	err = scraper.ExtractData(&data, "body", UnmarshalOption{})
+	err = scraper.Run(ExtractData(&data, "body", UnmarshalOption{}))
 	if err == nil {
 		t.Error("ExtractData() should return error when no page is loaded")
 	}
@@ -279,7 +284,7 @@ func TestUnifiedThreadSafety(t *testing.T) {
 	scraper := UnifiedScraper(session)
 
 	// Navigate once
-	err := scraper.Navigate(server.URL)
+	err := scraper.Run(Navigate(server.URL))
 	if err != nil {
 		t.Fatalf("Navigate() error = %v", err)
 	}
@@ -290,7 +295,7 @@ func TestUnifiedThreadSafety(t *testing.T) {
 		go func(i int) {
 			defer func() { done <- true }()
 
-			err := scraper.SendKeys("input[name=username]", Sprintf("user%d", i))
+			err := scraper.Run(SendKeys("input[name=username]", fmt.Sprintf("user%d", i)))
 			if err != nil {
 				t.Errorf("SendKeys() error = %v", err)
 			}

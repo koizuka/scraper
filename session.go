@@ -752,74 +752,9 @@ func (session *Session) sendKeysAction(selector, value string) error {
 	return nil
 }
 
-// clickAction performs click operation
+// clickAction performs click operation (delegates to Click method)
 func (session *Session) clickAction(selector string) error {
-	session.mu.RLock()
-	currentPage := session.currentPage
-	session.mu.RUnlock()
-
-	if currentPage == nil {
-		return fmt.Errorf("session: no current page available for click")
-	}
-
-	// Try to find a clickable element (link or form submit)
-	selection := currentPage.Find(selector)
-	if selection.Length() == 0 {
-		return fmt.Errorf("session: selector %q not found", selector)
-	}
-
-	// Check if it's a link
-	if _, exists := selection.Attr("href"); exists {
-		resp, err := session.FollowSelectionLink(currentPage, selection, "href")
-		if err != nil {
-			return err
-		}
-		page, err := resp.Page()
-		if err != nil {
-			return err
-		}
-		session.mu.Lock()
-		session.currentPage = page
-		session.mu.Unlock()
-		return nil
-	}
-
-	// Check if it's a form submit button
-	if selection.Is("input[type=submit], button[type=submit], button") {
-		form := selection.Closest("form")
-		if form.Length() > 0 {
-			formSelector := ""
-			if name, exists := form.Attr("name"); exists {
-				formSelector = fmt.Sprintf("form[name=%s]", name)
-			} else if id, exists := form.Attr("id"); exists {
-				formSelector = fmt.Sprintf("form#%s", id)
-			} else {
-				formSelector = "form"
-			}
-
-			session.mu.RLock()
-			formData := make(map[string]string)
-			for k, v := range session.pendingFormData {
-				formData[k] = v
-			}
-			session.mu.RUnlock()
-
-			resp, err := session.FormAction(currentPage, formSelector, formData)
-			if err != nil {
-				return err
-			}
-			page, err := resp.Page()
-			if err != nil {
-				return err
-			}
-			session.mu.Lock()
-			session.currentPage = page
-			session.mu.Unlock()
-			return nil
-		}
-	}
-
-	return fmt.Errorf("session: selector %q is not clickable", selector)
+	return session.Click(selector)
 }
 
 // sleepAction performs sleep (no-op in replay mode)

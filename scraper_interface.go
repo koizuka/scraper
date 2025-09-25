@@ -89,7 +89,7 @@ func Navigate(url string) UnifiedAction {
 		} else if httpSession, ok := scraper.(*Session); ok {
 			return httpSession.navigateAction(url)
 		}
-		return fmt.Errorf("unsupported scraper type")
+		return fmt.Errorf("Navigate action: unsupported scraper type %T", scraper)
 	})
 }
 
@@ -101,7 +101,7 @@ func WaitVisible(selector string) UnifiedAction {
 		} else if httpSession, ok := scraper.(*Session); ok {
 			return httpSession.waitVisibleAction(selector)
 		}
-		return fmt.Errorf("unsupported scraper type")
+		return fmt.Errorf("WaitVisible action: unsupported scraper type %T", scraper)
 	})
 }
 

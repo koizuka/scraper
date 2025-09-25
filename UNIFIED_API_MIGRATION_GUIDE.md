@@ -1,6 +1,10 @@
 # 統一スクレイピングAPI移行ガイド
 
-このガイドでは、既存のChrome専用またはHTTP専用コードを統一インターフェースに移行する方法を説明します。
+このガイドでは、既存のChrome専用またはHTTP専用コードを統一Action-baseインターフェースに移行する方法を説明します。
+
+## 🎉 新しいAction-based設計
+
+v2.0では、chromedp.Run()ライクなAction-based APIに刷新されました。chromedpの優れた可変引数スタイルを統一APIでも実現し、より簡潔で保守しやすいコードが書けるようになりました。
 
 ## 目次
 
@@ -26,7 +30,7 @@
 
 ## 基本的な移行パターン
 
-### パターン1: 基本的な置き換え
+### パターン1: chromedp.Run()スタイルの移行
 
 **移行前（Chrome専用）:**
 
@@ -37,7 +41,7 @@ func scrapeWithChrome(session *scraper.Session) error {
         return err
     }
     defer cancel()
-    
+
     err = chromedp.Run(chromeSession.Ctx,
         chromedp.Navigate("https://example.com"),
         chromedp.WaitVisible("h1", chromedp.ByQuery),
@@ -46,7 +50,7 @@ func scrapeWithChrome(session *scraper.Session) error {
     if err != nil {
         return err
     }
-    
+
     var data struct {
         Title string `find:"h1"`
     }
@@ -54,29 +58,27 @@ func scrapeWithChrome(session *scraper.Session) error {
 }
 ```
 
-**移行後（統一インターフェース）:**
+**移行後（統一Action-based API）:**
 
 ```go
 func scrapeUnified(scraperInstance scraper.UnifiedScraper) error {
-    err := scraperInstance.Navigate("https://example.com")
+    // chromedp.Run()と同じスタイルで統一API使用
+    err := scraperInstance.Run(
+        scraper.Navigate("https://example.com"),
+        scraper.WaitVisible("h1"),
+        scraper.SavePage(),
+    )
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.WaitVisible("h1")
-    if err != nil {
-        return err
-    }
-    
-    _, err = scraperInstance.SavePage()
-    if err != nil {
-        return err
-    }
-    
+
+    // データ抽出も統一
     var data struct {
         Title string `find:"h1"`
     }
-    return scraperInstance.ExtractData(&data, "body", scraper.UnmarshalOption{})
+    return scraperInstance.Run(
+        scraper.ExtractData(&data, "body", scraper.UnmarshalOption{}),
+    )
 }
 ```
 
@@ -129,9 +131,9 @@ func main() {
 }
 ```
 
-## メソッド対応表
+## Action対応表
 
-### Chrome専用コード → 統一インターフェース
+### Chrome専用コード → 統一Action API
 
 | 移行前 | 移行後 | 説明 |
 |--------|--------|------|
@@ -139,17 +141,39 @@ func main() {
 | `chromedp.WaitVisible(sel)` | `scraper.WaitVisible(sel)` | 要素の表示待ち |
 | `chromedp.SendKeys(sel, val)` | `scraper.SendKeys(sel, val)` | フォーム入力 |
 | `chromedp.Click(sel)` | `scraper.Click(sel)` | クリック操作 |
+| `chromedp.Sleep(duration)` | `scraper.Sleep(duration)` | 待機（replay時自動スキップ） |
 | `chromeSession.SaveHtml(nil)` | `scraper.SavePage()` | HTML保存 |
 | `chromeSession.Unmarshal(&v, sel, opt)` | `scraper.ExtractData(&v, sel, opt)` | データ抽出 |
-| `chromeSession.DownloadFile(&f, opts, actions...)` | `scraper.DownloadResource(opts)` | ファイルダウンロード |
 
-### HTTP専用コード → 統一インターフェース
+### 実行方法の比較
+
+**Chrome専用 (移行前):**
+```go
+err = chromedp.Run(ctx,
+    chromedp.Navigate(url),
+    chromedp.WaitVisible(sel),
+    chromedp.Click(sel),
+)
+```
+
+**統一Action API (移行後):**
+```go
+err = scraper.Run(
+    scraper.Navigate(url),
+    scraper.WaitVisible(sel),
+    scraper.Click(sel),
+)
+```
+
+### HTTP専用コード → 統一Action API
+
+HTTPスクレイピングでも同じActionを使用できます：
 
 | 移行前 | 移行後 | 説明 |
 |--------|--------|------|
-| `session.GetPage(url)` | `scraper.Navigate(url)` | ページ取得 |
-| `session.FormAction(page, sel, params)` | `scraper.SubmitForm(sel, params)` | フォーム送信 |
-| `session.FollowAnchorText(page, text)` | `scraper.FollowAnchor(text)` | リンク辿り |
+| `session.GetPage(url)` + 状態管理 | `scraper.Navigate(url)` | ページ取得と状態更新 |
+| `session.FormAction(page, sel, params)` | `scraper.SendKeys()` + `scraper.Click()` | フォーム操作を分割 |
+| `session.FollowAnchorText(page, text)` | `scraper.Click()` with text selector | リンククリック |
 | `scraper.Unmarshal(&v, selection, opt)` | `scraper.ExtractData(&v, sel, opt)` | データ抽出 |
 
 ## 実践的な移行例
@@ -182,58 +206,44 @@ func getSbiSecurityChrome(param ParamRegistry, service StatementReceiver, sessio
 }
 ```
 
-**移行後の統一インターフェース版:**
+**移行後の統一Action API版:**
 
 ```go
 func getSbiSecurityUnified(param ParamRegistry, service StatementReceiver, scraperInstance scraper.UnifiedScraper) error {
     scraperInstance.SetDebugStep("SBI証券ログイン")
     defer scraperInstance.ClearDebugStep()
-    
-    err := scraperInstance.Navigate(`https://www.sbisec.co.jp/`)
+
+    // ログイン処理をAction-baseスタイルで実行
+    err := scraperInstance.Run(
+        scraper.Navigate(`https://www.sbisec.co.jp/`),
+        scraper.WaitVisible(`form[name=form_login]`),
+        scraper.SendKeys(`input[name=user_id]`, param.Param(ParamUser)),
+        scraper.SendKeys(`input[name=user_password]`, param.Param(ParamPassword)),
+        scraper.Click(`[name=ACT_login]`),
+        scraper.SavePage(),
+    )
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.WaitVisible(`form[name=form_login]`)
-    if err != nil {
-        return err
-    }
-    
-    err = scraperInstance.SendKeys(`input[name=user_id]`, param.Param(ParamUser))
-    if err != nil {
-        return err
-    }
-    
-    err = scraperInstance.SendKeys(`input[name=user_password]`, param.Param(ParamPassword))
-    if err != nil {
-        return err
-    }
-    
-    err = scraperInstance.Click(`[name=ACT_login]`)
-    if err != nil {
-        return err
-    }
-    
-    // ポートフォリオページへ遷移
-    err = scraperInstance.FollowAnchor("ポートフォリオ")
-    if err != nil {
-        return err
-    }
-    
-    // データ抽出
+
+    // データ抽出処理
     type PositionData struct {
         Items []struct {
             Name  string  `find:".stock-name"`
             Price float64 `find:".price" re:"([0-9,]+)"`
         } `find:".position-row"`
     }
-    
+
     var positions PositionData
-    err = scraperInstance.ExtractData(&positions, ".portfolio-table", scraper.UnmarshalOption{})
+    err = scraperInstance.Run(
+        scraper.Click("a:contains('ポートフォリオ')"), // ポートフォリオページへ
+        scraper.WaitVisible(".portfolio-table"),
+        scraper.ExtractData(&positions, ".portfolio-table", scraper.UnmarshalOption{}),
+    )
     if err != nil {
         return err
     }
-    
+
     scraperInstance.Printf("取得したポジション数: %d", len(positions.Items))
     return nil
 }
@@ -289,44 +299,79 @@ func main() {
 }
 ```
 
-## 注意点とベストプラクティス
+## 新機能とベストプラクティス
 
-### ⚠️ **移行時の注意点**
+### 🎯 **Action-based APIの利点**
 
-#### 1. **ダウンロード機能の違い**
+#### 1. **カスタムAction作成**
 
 ```go
-// Chrome版: 高機能だが複雑
-chromeSession.DownloadFile(&filename, options, 
-    chromedp.Click(".download-button"),
+// よく使う操作をActionとして部品化
+func JCBLogin(userId, password string) scraper.UnifiedAction {
+    return scraper.ActionFunc(func(s scraper.UnifiedScraper) error {
+        return s.Run(
+            scraper.Navigate("https://my.jcb.co.jp/Login"),
+            scraper.WaitVisible("form[name='loginForm']"),
+            scraper.SendKeys("#userId", userId),
+            scraper.SendKeys("#password", password),
+            scraper.Sleep(2*time.Second),
+            scraper.Click("#loginButtonAD"),
+        )
+    })
+}
+
+// 使用例
+err := scraper.Run(
+    JCBLogin("myuser", "mypass"),
+    scraper.SavePage(),
+    // 続きの処理...
+)
+```
+
+#### 2. **条件分岐処理**
+
+```go
+// Action内で条件分岐も可能
+func ConditionalLogin(scraper scraper.UnifiedScraper) error {
+    err := scraper.Run(
+        scraper.Navigate("https://example.com/login"),
+        scraper.SavePage(),
+    )
+    if err != nil {
+        return err
+    }
+
+    // 現在のURLで処理を分岐
+    currentURL, _ := scraper.GetCurrentURL()
+    if strings.Contains(currentURL, "yahoo.co.jp") {
+        return scraper.Run(
+            scraper.WaitVisible(`input[name="handle"]`),
+            scraper.SendKeys(`input[name="handle"]`, userId),
+            scraper.Click(`button[class*="riff-bg-key"]`),
+        )
+    } else {
+        return scraper.Run(
+            scraper.WaitVisible("#loginForm"),
+            scraper.SendKeys("#username", userId),
+            scraper.Click("#submit"),
+        )
+    }
+}
+```
+
+#### 3. **Replay Mode完全対応**
+
+```go
+// Sleep は replay mode で自動的にスキップされる
+err := scraper.Run(
+    scraper.Navigate("https://example.com"),
+    scraper.Sleep(3*time.Second), // 記録時のみ実行、リプレイ時はスキップ
+    scraper.Click("#button"),
 )
 
-// 統一版: シンプルだが機能制限
-filename, err := scraper.DownloadResource(options)
-// → 複雑なダウンロードは既存メソッドを併用
-```
-
-#### 2. **コンテキスト処理**
-
-```go
-// Chrome版では明示的なコンテキスト管理が必要
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-defer cancel()
-
-// 統一版ではタイムアウトは内部処理
-scraper.WaitVisible("selector") // タイムアウトは実装依存
-```
-
-#### 3. **エラーハンドリング**
-
-```go
-// 統一インターフェースでは具体的なエラー情報が制限される場合がある
-err := scraper.Click("selector")
-if err != nil {
-    // Chrome固有のエラー情報が必要な場合は型アサーションを使用
-    if chromeSession, ok := scraper.(*scraper.ChromeSession); ok {
-        // Chrome固有の処理
-    }
+// IsReplayMode()で状態確認も可能
+if !scraper.IsReplayMode() {
+    scraper.Printf("実際のネットワーク通信中...")
 }
 ```
 
@@ -419,11 +464,28 @@ func advancedDownload(scraperInstance scraper.UnifiedScraper) error {
 
 ## まとめ
 
-統一インターフェースへの移行により：
+Action-based統一インターフェースへの移行により：
 
-1. **Chrome版とHTTP版のコードが統一される**
-2. **実行時にスクレイピング方法を切り替え可能**  
-3. **既存コードは完全に保持される**
-4. **段階的な移行が可能**
+1. **🎯 chromedp.Run()スタイルで直感的な操作**
+2. **🔄 Chrome版とHTTP版のコードが完全統一**
+3. **⚡ Replay Mode で爆速開発・デバッグ**
+4. **🧩 カスタムActionで高い再利用性**
+5. **🛠️ 条件分岐とエラーハンドリングが簡潔**
 
-移行は急ぐ必要はありません。新しい機能から統一インターフェースを使用し、既存コードは必要に応じて徐々に移行してください。
+## 移行のポイント
+
+### ✅ **すぐに移行すべき理由**
+
+- **開発効率の劇的向上**: Replay modeでスクレイピング開発が爆速化
+- **コード保守性**: chromedp.Run()スタイルで可読性アップ
+- **テスト容易性**: HTTP/Chrome両方で同じテストコード
+- **条件分岐の簡潔性**: ActionFuncが不要になりGoの標準制御構文で記述
+
+### 🚀 **推奨移行手順**
+
+1. **新機能はAction-based APIで実装**
+2. **既存の問題箇所から段階的に移行**
+3. **Replay modeを活用して開発を高速化**
+4. **カスタムActionで共通処理を部品化**
+
+この新設計により、スクレイピングコードの開発・保守・テストが格段に効率化されます！

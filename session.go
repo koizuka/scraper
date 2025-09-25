@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -429,14 +430,197 @@ func (session *Session) FollowAnchorText(page *Page, text string) (*Response, er
 
 // UnifiedScraper interface implementation for Session
 
-// Navigate implements UnifiedScraper.Navigate
-func (session *Session) Navigate(url string) error {
+// Run executes a sequence of UnifiedActions
+func (session *Session) Run(actions ...UnifiedAction) error {
+	for _, action := range actions {
+		if err := action.Do(session); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetCurrentURL returns the current page URL
+func (session *Session) GetCurrentURL() (string, error) {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
+		return "", fmt.Errorf("session: no current page available")
+	}
+
+	if currentPage.response != nil && currentPage.response.Request != nil {
+		return currentPage.response.Request.URL.String(), nil
+	}
+
+	return "", fmt.Errorf("session: no URL information available")
+}
+
+// IsReplayMode returns true if the scraper is in replay mode
+func (session *Session) IsReplayMode() bool {
+	return session.NotUseNetwork
+}
+
+// Action method implementations for Session
+
+// navigateAction performs navigation
+func (session *Session) navigateAction(url string) error {
 	page, err := session.GetPage(url)
 	if err != nil {
 		return err
 	}
+	session.mu.Lock()
 	session.currentPage = page
+	session.mu.Unlock()
 	return nil
+}
+
+// waitVisibleAction - no-op for HTTP scraping
+func (session *Session) waitVisibleAction(selector string) error {
+	// For HTTP-based scraping, this is a no-op since elements are immediately available
+	return nil
+}
+
+// sendKeysAction stores form data to be submitted later
+func (session *Session) sendKeysAction(selector, value string) error {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Store form data in session for later submission
+	if session.pendingFormData == nil {
+		session.pendingFormData = make(map[string]string)
+	}
+	session.pendingFormData[selector] = value
+	return nil
+}
+
+// clickAction performs click operation
+func (session *Session) clickAction(selector string) error {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
+		return fmt.Errorf("session: no current page available for click")
+	}
+
+	// Try to find a clickable element (link or form submit)
+	selection := currentPage.Find(selector)
+	if selection.Length() == 0 {
+		return fmt.Errorf("session: selector %q not found", selector)
+	}
+
+	// Check if it's a link
+	if _, exists := selection.Attr("href"); exists {
+		resp, err := session.FollowSelectionLink(currentPage, selection, "href")
+		if err != nil {
+			return err
+		}
+		page, err := resp.Page()
+		if err != nil {
+			return err
+		}
+		session.mu.Lock()
+		session.currentPage = page
+		session.mu.Unlock()
+		return nil
+	}
+
+	// Check if it's a form submit button
+	if selection.Is("input[type=submit], button[type=submit], button") {
+		form := selection.Closest("form")
+		if form.Length() > 0 {
+			formSelector := ""
+			if name, exists := form.Attr("name"); exists {
+				formSelector = fmt.Sprintf("form[name=%s]", name)
+			} else if id, exists := form.Attr("id"); exists {
+				formSelector = fmt.Sprintf("form#%s", id)
+			} else {
+				formSelector = "form"
+			}
+
+			session.mu.RLock()
+			formData := make(map[string]string)
+			for k, v := range session.pendingFormData {
+				formData[k] = v
+			}
+			session.mu.RUnlock()
+			return session.submitUnified(formSelector, formData)
+		}
+	}
+
+	return fmt.Errorf("session: selector %q is not clickable", selector)
+}
+
+// sleepAction performs sleep (no-op in replay mode)
+func (session *Session) sleepAction(duration time.Duration) error {
+	if session.IsReplayMode() {
+		// In replay mode, skip sleep and just log
+		session.Printf("REPLAY SLEEP: skipping %v", duration)
+		return nil
+	}
+	// For HTTP scraping, sleep is not typically needed, but we can do a simple time.Sleep
+	session.Printf("SLEEP: %v", duration)
+	time.Sleep(duration)
+	return nil
+}
+
+// savePageAction saves the current page HTML
+func (session *Session) savePageAction() error {
+	if session.currentPage == nil {
+		return fmt.Errorf("session: no current page available")
+	}
+
+	// Ensure directory exists
+	dirname := session.getDirectory()
+	if _, err := os.Stat(dirname); err != nil && os.IsNotExist(err) {
+		if err := os.MkdirAll(dirname, os.FileMode(0755)); err != nil {
+			return fmt.Errorf("session: failed to create directory %s: %w", dirname, err)
+		}
+	}
+
+	session.invokeCount++
+	filename := session.getHtmlFilename()
+
+	html, err := session.currentPage.Html()
+	if err != nil {
+		return err
+	}
+
+	body := []byte(html)
+
+	// Apply body filter if set
+	if session.BodyFilter != nil {
+		filteredBody, err := session.BodyFilter(session.currentPage.response, body)
+		if err != nil {
+			return fmt.Errorf("session: body filter error: %w", err)
+		}
+		body = filteredBody
+	}
+
+	// Always save HTML
+	err = os.WriteFile(filename, body, os.FileMode(0644))
+	if err != nil {
+		return fmt.Errorf("session: failed to save HTML: %w", err)
+	}
+	session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
+
+	return nil
+}
+
+// extractDataAction extracts data using CSS selectors
+func (session *Session) extractDataAction(v interface{}, selector string, opt UnmarshalOption) error {
+	session.mu.RLock()
+	currentPage := session.currentPage
+	session.mu.RUnlock()
+
+	if currentPage == nil {
+		return fmt.Errorf("session: no current page available for data extraction")
+	}
+
+	selection := currentPage.Find(selector)
+	return Unmarshal(v, selection, opt)
 }
 
 // WaitVisible implements UnifiedScraper.WaitVisible

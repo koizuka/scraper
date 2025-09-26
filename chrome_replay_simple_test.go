@@ -3,6 +3,7 @@ package scraper
 import (
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,7 +14,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_replay_simple_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -62,10 +63,14 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		session := NewSession("test", &logger)
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		start := time.Now()
-		err := chromeSession.Sleep(5 * time.Second)
+		err = chromeSession.Sleep(5 * time.Second)
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -85,7 +90,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_download_simple_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -112,24 +117,37 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{
-			Session:      session,
-			DownloadPath: chromeDir,
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
 		}
 
 		var filename string
 		action := chromeSession.DownloadFile(&filename, DownloadFileOptions{})
 
-		// Test replay logic by calling the function directly without Chrome context
-		err = action(nil) // nil context is ok for replay mode
+		// Test replay logic
+		err = action(chromeSession.Ctx)
 		if err != nil {
 			t.Errorf("DownloadFile() in replay mode error: %v", err)
 			return
 		}
 
-		expectedFilename := mockFile
-		if filename != expectedFilename {
-			t.Errorf("Expected filename %v, got %v", expectedFilename, filename)
+		// Check that the filename ends with the expected path (may be absolute)
+		expectedSuffix := path.Join("chrome", "test.txt")
+		if !strings.HasSuffix(filename, expectedSuffix) {
+			t.Errorf("Expected filename to end with %v, got %v", expectedSuffix, filename)
+			return
+		}
+
+		// Verify the file actually exists and has correct content
+		content, err := os.ReadFile(filename)
+		if err != nil {
+			t.Errorf("Failed to read downloaded file: %v", err)
+			return
+		}
+		if string(content) != "mock download content" {
+			t.Errorf("Expected file content 'mock download content', got %q", string(content))
 			return
 		}
 	})

@@ -291,3 +291,167 @@ func TestChromeSession_DebugStep(t *testing.T) {
 		}
 	})
 }
+
+func TestChromeSession_ReplayMode(t *testing.T) {
+	// Create a test server with multiple pages
+	testPages := map[string]string{
+		"/":       "<html><body><h1>Home Page</h1><a href='/page2'>Go to Page 2</a></body></html>",
+		"/page2":  "<html><body><h1>Page 2</h1><button id='btn'>Click me</button></body></html>",
+		"/result": "<html><body><h1>Result Page</h1><p>Success!</p></body></html>",
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if content, exists := testPages[r.URL.Path]; exists {
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprint(w, content)
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	// Create temp directory
+	dir, err := os.MkdirTemp(".", "chrome_replay_test*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
+	sessionName := "chrome_replay_test"
+	err = os.Mkdir(path.Join(dir, sessionName), 0744)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logger := &BufferedLogger{}
+	session := NewSession(sessionName, logger)
+	session.FilePrefix = dir + "/"
+
+	t.Run("record mode", func(t *testing.T) {
+		// First, record the session
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		// Record a series of actions
+		err = chromeSession.Navigate(ts.URL)
+		if err != nil {
+			t.Errorf("Navigate() error: %v", err)
+		}
+
+		err = chromeSession.WaitVisible("h1")
+		if err != nil {
+			t.Errorf("WaitVisible() error: %v", err)
+		}
+
+		err = chromeSession.Click("a")
+		if err != nil {
+			t.Errorf("Click() error: %v", err)
+		}
+
+		err = chromeSession.WaitVisible("#btn")
+		if err != nil {
+			t.Errorf("WaitVisible() error: %v", err)
+		}
+
+		// Verify files were created
+		expectedFiles := []string{
+			path.Join(dir, sessionName, "1.html"),
+			path.Join(dir, sessionName, "2.html"),
+			path.Join(dir, sessionName, "3.html"),
+			path.Join(dir, sessionName, "4.html"),
+		}
+
+		for _, expectedFile := range expectedFiles {
+			if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+				t.Errorf("Expected file %s was not created", expectedFile)
+			}
+		}
+	})
+
+	t.Run("replay mode", func(t *testing.T) {
+		// Reset logger and invoke count for replay test
+		logger.buffer.Reset()
+		session.invokeCount = 0
+
+		// Enable replay mode
+		session.NotUseNetwork = true
+
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		// Replay the same series of actions
+		err = chromeSession.Navigate("http://should-not-be-used")
+		if err != nil {
+			t.Errorf("Navigate() in replay mode error: %v", err)
+		}
+
+		err = chromeSession.WaitVisible("h1")
+		if err != nil {
+			t.Errorf("WaitVisible() in replay mode error: %v", err)
+		}
+
+		err = chromeSession.Click("a")
+		if err != nil {
+			t.Errorf("Click() in replay mode error: %v", err)
+		}
+
+		err = chromeSession.WaitVisible("#btn")
+		if err != nil {
+			t.Errorf("WaitVisible() in replay mode error: %v", err)
+		}
+
+		// Test that ExtractData works in replay mode
+		type PageData struct {
+			Title string `find:"h1"`
+		}
+
+		var data PageData
+		err = chromeSession.ExtractData(&data, "body", UnmarshalOption{})
+		if err != nil {
+			t.Errorf("ExtractData() in replay mode error: %v", err)
+		}
+
+		// The last page should be page2 with "Page 2" title
+		expectedTitle := "Page 2"
+		if data.Title != expectedTitle {
+			t.Errorf("Expected title %q, got %q", expectedTitle, data.Title)
+		}
+
+		// Verify that replay logs were generated
+		logOutput := logger.buffer.String()
+		if !strings.Contains(logOutput, "REPLAY LOADED") {
+			t.Errorf("Expected replay logs, got: %s", logOutput)
+		}
+	})
+
+	t.Run("replay mode - file not found", func(t *testing.T) {
+		// Reset for clean test
+		session.invokeCount = 0
+		session.NotUseNetwork = true
+
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		// Remove one of the saved files to test error handling
+		os.Remove(path.Join(dir, sessionName, "1.html"))
+
+		err = chromeSession.Navigate("http://should-not-be-used")
+		if err == nil {
+			t.Error("Expected error when replay file not found, got nil")
+		}
+
+		// Check that it returns RetryAndRecordError
+		if _, ok := err.(RetryAndRecordError); !ok {
+			t.Errorf("Expected RetryAndRecordError, got %T: %v", err, err)
+		}
+	})
+}

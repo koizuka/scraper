@@ -315,7 +315,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	t.Cleanup(func() { os.RemoveAll(dir) })
 
 	sessionName := "chrome_replay_test"
 	err = os.Mkdir(path.Join(dir, sessionName), 0744)

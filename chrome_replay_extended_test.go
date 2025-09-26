@@ -15,7 +15,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_savefile_replay_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -72,7 +72,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_retry_error_test"
 		logger := BufferedLogger{}
@@ -106,7 +106,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_counter_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -160,7 +160,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_unified_replay_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -230,7 +230,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_form_anchor_replay_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -293,7 +293,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_download_glob_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -349,7 +349,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_context_cancel_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)

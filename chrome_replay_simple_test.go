@@ -14,7 +14,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_replay_simple_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)
@@ -90,7 +90,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer func() { _ = os.RemoveAll(dir) }()
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_download_simple_test"
 		err = os.Mkdir(path.Join(dir, sessionName), 0744)

@@ -20,6 +20,11 @@ const (
 	DefaultDirPermission  = 0755 // Read/write/execute for owner, read/execute for group and others
 )
 
+// URL constants for replay mode
+const (
+	DefaultBlankURL = "about:blank"
+)
+
 type ChromeSession struct {
 	*Session
 	Ctx          context.Context
@@ -104,8 +109,8 @@ func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
 	metadata, err := loadPageMetadata(filename)
 	if err != nil {
 		// If metadata is not available, just load the HTML without URL context
-		session.Printf("Warning: failed to load metadata for %s: %v", filename, err)
-		metadata = PageMetadata{URL: "about:blank"}
+		session.Printf("%s WARNING: failed to load metadata for %s: %v", session.getDebugPrefix(), filename, err)
+		metadata = PageMetadata{URL: DefaultBlankURL}
 	}
 
 	// Load HTML into browser by writing to a temp file and loading it
@@ -120,7 +125,7 @@ func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
 	// Get absolute path for the temp file
 	absPath, err := filepath.Abs(tempFile)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return fmt.Errorf("failed to get absolute path for temp file %s: %w", tempFile, err)
 	}
 
 	// Load the temp file using file:// protocol with absolute path
@@ -131,7 +136,7 @@ func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
 	}
 
 	// Set the URL context in browser if we have valid metadata
-	if metadata.URL != "" && metadata.URL != "about:blank" {
+	if metadata.URL != "" && metadata.URL != DefaultBlankURL {
 		// Use JavaScript to update the browser's location context for debugging
 		// Note: This won't actually change the URL bar but helps with relative URL resolution
 		script := fmt.Sprintf(`

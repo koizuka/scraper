@@ -58,21 +58,21 @@ func scrapeWithChrome(session *scraper.Session) error {
 
 ```go
 func scrapeUnified(scraperInstance scraper.UnifiedScraper) error {
-    err := scraperInstance.Navigate("https://example.com")
+    err := scraperInstance.DoNavigate("https://example.com")
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.WaitVisible("h1")
+
+    err = scraperInstance.DoWaitVisible("h1")
     if err != nil {
         return err
     }
-    
+
     _, err = scraperInstance.SavePage()
     if err != nil {
         return err
     }
-    
+
     var data struct {
         Title string `find:"h1"`
     }
@@ -135,10 +135,10 @@ func main() {
 
 | 移行前 | 移行後 | 説明 |
 |--------|--------|------|
-| `chromedp.Navigate(url)` | `scraper.Navigate(url)` | ページ遷移 |
-| `chromedp.WaitVisible(sel)` | `scraper.WaitVisible(sel)` | 要素の表示待ち |
-| `chromedp.SendKeys(sel, val)` | `scraper.SendKeys(sel, val)` | フォーム入力 |
-| `chromedp.Click(sel)` | `scraper.Click(sel)` | クリック操作 |
+| `chromedp.Navigate(url)` | `scraper.DoNavigate(url)` | ページ遷移 |
+| `chromedp.WaitVisible(sel)` | `scraper.DoWaitVisible(sel)` | 要素の表示待ち |
+| `chromedp.SendKeys(sel, val)` | `scraper.DoSendKeys(sel, val)` | フォーム入力 |
+| `chromedp.Click(sel)` | `scraper.DoClick(sel)` | クリック操作 |
 | `chromeSession.SaveHtml(nil)` | `scraper.SavePage()` | HTML保存 |
 | `chromeSession.Unmarshal(&v, sel, opt)` | `scraper.ExtractData(&v, sel, opt)` | データ抽出 |
 | `chromeSession.DownloadFile(&f, opts, actions...)` | `scraper.DownloadResource(opts)` | ファイルダウンロード |
@@ -147,7 +147,7 @@ func main() {
 
 | 移行前 | 移行後 | 説明 |
 |--------|--------|------|
-| `session.GetPage(url)` | `scraper.Navigate(url)` | ページ取得 |
+| `session.GetPage(url)` | `scraper.DoNavigate(url)` | ページ取得 |
 | `session.FormAction(page, sel, params)` | `scraper.SubmitForm(sel, params)` | フォーム送信 |
 | `session.FollowAnchorText(page, text)` | `scraper.FollowAnchor(text)` | リンク辿り |
 | `scraper.Unmarshal(&v, selection, opt)` | `scraper.ExtractData(&v, sel, opt)` | データ抽出 |
@@ -188,38 +188,38 @@ func getSbiSecurityChrome(param ParamRegistry, service StatementReceiver, sessio
 func getSbiSecurityUnified(param ParamRegistry, service StatementReceiver, scraperInstance scraper.UnifiedScraper) error {
     scraperInstance.SetDebugStep("SBI証券ログイン")
     defer scraperInstance.ClearDebugStep()
-    
-    err := scraperInstance.Navigate(`https://www.sbisec.co.jp/`)
+
+    err := scraperInstance.DoNavigate(`https://www.sbisec.co.jp/`)
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.WaitVisible(`form[name=form_login]`)
+
+    err = scraperInstance.DoWaitVisible(`form[name=form_login]`)
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.SendKeys(`input[name=user_id]`, param.Param(ParamUser))
+
+    err = scraperInstance.DoSendKeys(`input[name=user_id]`, param.Param(ParamUser))
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.SendKeys(`input[name=user_password]`, param.Param(ParamPassword))
+
+    err = scraperInstance.DoSendKeys(`input[name=user_password]`, param.Param(ParamPassword))
     if err != nil {
         return err
     }
-    
-    err = scraperInstance.Click(`[name=ACT_login]`)
+
+    err = scraperInstance.DoClick(`[name=ACT_login]`)
     if err != nil {
         return err
     }
-    
+
     // ポートフォリオページへ遷移
     err = scraperInstance.FollowAnchor("ポートフォリオ")
     if err != nil {
         return err
     }
-    
+
     // データ抽出
     type PositionData struct {
         Items []struct {
@@ -227,13 +227,13 @@ func getSbiSecurityUnified(param ParamRegistry, service StatementReceiver, scrap
             Price float64 `find:".price" re:"([0-9,]+)"`
         } `find:".position-row"`
     }
-    
+
     var positions PositionData
     err = scraperInstance.ExtractData(&positions, ".portfolio-table", scraper.UnmarshalOption{})
     if err != nil {
         return err
     }
-    
+
     scraperInstance.Printf("取得したポジション数: %d", len(positions.Items))
     return nil
 }
@@ -321,7 +321,7 @@ scraper.WaitVisible("selector") // タイムアウトは実装依存
 
 ```go
 // 統一インターフェースでは具体的なエラー情報が制限される場合がある
-err := scraper.Click("selector")
+err := scraper.DoClick("selector")
 if err != nil {
     // Chrome固有のエラー情報が必要な場合は型アサーションを使用
     if chromeSession, ok := scraper.(*scraper.ChromeSession); ok {
@@ -417,13 +417,64 @@ func advancedDownload(scraperInstance scraper.UnifiedScraper) error {
 }
 ```
 
+## 新機能: ActionFunc対応
+
+v0.0.49より、ChromeSessionのメソッドがActionFuncを返すようになり、`chromedp.Run`内で複数のアクションを組み合わせて実行できるようになりました。
+
+### ActionFuncを使用した高効率実行
+
+**新しい書き方（推奨）:**
+
+```go
+// 複数のアクションを一度に実行
+err := chromedp.Run(chromeSession.Ctx,
+    chromeSession.Navigate("https://example.com"),
+    chromeSession.WaitVisible("h1"),
+    chromeSession.SendKeys("#input", "value"),
+    chromeSession.Click("#submit"),
+    chromeSession.Sleep(2 * time.Second),
+)
+```
+
+**従来の書き方（まだ利用可能）:**
+
+```go
+// UnifiedScraperインターフェース経由
+err := chromeSession.DoNavigate("https://example.com")
+if err != nil { return err }
+
+err = chromeSession.DoWaitVisible("h1")
+if err != nil { return err }
+
+err = chromeSession.DoSendKeys("#input", "value")
+if err != nil { return err }
+```
+
+### ActionFuncの利点
+
+1. **パフォーマンス向上**: 複数のアクションをバッチ実行
+2. **エラーハンドリングの簡素化**: 一箇所でエラーを処理
+3. **他のchromedpアクションとの組み合わせ**: 標準のchromedpアクションと混在可能
+
+```go
+// 標準のchromedpアクションと組み合わせ
+err := chromedp.Run(chromeSession.Ctx,
+    chromeSession.Navigate("https://example.com"),
+    chromedp.Screenshot("screenshot.png"),  // 標準chromedp
+    chromeSession.WaitVisible("#content"),
+    chromedp.SetValue("#input", "value"),   // 標準chromedp
+    chromeSession.Click("#submit"),
+)
+```
+
 ## まとめ
 
 統一インターフェースへの移行により：
 
 1. **Chrome版とHTTP版のコードが統一される**
-2. **実行時にスクレイピング方法を切り替え可能**  
+2. **実行時にスクレイピング方法を切り替え可能**
 3. **既存コードは完全に保持される**
 4. **段階的な移行が可能**
+5. **新しいActionFunc機能によりパフォーマンスが向上**
 
 移行は急ぐ必要はありません。新しい機能から統一インターフェースを使用し、既存コードは必要に応じて徐々に移行してください。

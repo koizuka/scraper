@@ -74,7 +74,7 @@ func TestChromeSession_GetCurrentURL(t *testing.T) {
 		defer cancel()
 
 		// Navigate to test page
-		err = chromeSession.Navigate(server.URL)
+		err = chromeSession.DoNavigate(server.URL)
 		if err != nil {
 			t.Fatalf("Failed to navigate: %v", err)
 		}
@@ -185,7 +185,7 @@ func TestChromeSession_GetCurrentURL_Replay(t *testing.T) {
 		defer cancel()
 
 		// Navigate and save
-		err = chromeSession.Navigate(server.URL)
+		err = chromeSession.DoNavigate(server.URL)
 		if err != nil {
 			t.Fatalf("Failed to navigate in record mode: %v", err)
 		}

@@ -39,12 +39,12 @@ func demonstrateUnifiedAPI(scraper UnifiedScraper) error {
 	defer scraper.ClearDebugStep()
 
 	// Navigate to a page
-	if err := scraper.Navigate("https://example.com"); err != nil {
+	if err := scraper.DoNavigate("https://example.com"); err != nil {
 		return fmt.Errorf("navigation failed: %w", err)
 	}
 
 	// Wait for content to be visible (no-op for HTTP, important for Chrome)
-	if err := scraper.WaitVisible("h1"); err != nil {
+	if err := scraper.DoWaitVisible("h1"); err != nil {
 		return fmt.Errorf("wait visible failed: %w", err)
 	}
 
@@ -108,16 +108,16 @@ func ExampleSwitchableScraper(useChrome bool) {
 // ExampleFormAutomation shows unified form handling
 func ExampleFormAutomation(scraper UnifiedScraper) error {
 	// Navigate to login page
-	if err := scraper.Navigate("https://example.com/login"); err != nil {
+	if err := scraper.DoNavigate("https://example.com/login"); err != nil {
 		return err
 	}
 
 	// Fill form fields
-	if err := scraper.SendKeys("input[name=username]", "user@example.com"); err != nil {
+	if err := scraper.DoSendKeys("input[name=username]", "user@example.com"); err != nil {
 		return err
 	}
 
-	if err := scraper.SendKeys("input[name=password]", "password123"); err != nil {
+	if err := scraper.DoSendKeys("input[name=password]", "password123"); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func ExampleFormAutomation(scraper UnifiedScraper) error {
 	}
 
 	// Wait for redirect/response
-	if err := scraper.WaitVisible(".dashboard"); err != nil {
+	if err := scraper.DoWaitVisible(".dashboard"); err != nil {
 		return err
 	}
 
@@ -137,7 +137,7 @@ func ExampleFormAutomation(scraper UnifiedScraper) error {
 
 // ExampleDataExtraction demonstrates advanced data extraction patterns
 func ExampleDataExtraction(scraper UnifiedScraper, url string) error {
-	if err := scraper.Navigate(url); err != nil {
+	if err := scraper.DoNavigate(url); err != nil {
 		return err
 	}
 
@@ -165,12 +165,12 @@ func ExampleDataExtraction(scraper UnifiedScraper, url string) error {
 
 // ExampleFileDownload shows how to handle downloads with the unified interface
 func ExampleFileDownload(scraper UnifiedScraper) error {
-	if err := scraper.Navigate("https://example.com/download"); err != nil {
+	if err := scraper.DoNavigate("https://example.com/download"); err != nil {
 		return err
 	}
 
 	// Click download link
-	if err := scraper.Click(".download-button"); err != nil {
+	if err := scraper.DoClick(".download-button"); err != nil {
 		return err
 	}
 

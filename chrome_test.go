@@ -336,22 +336,22 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		}
 
 		// Record a series of actions
-		err = chromeSession.Navigate(ts.URL)
+		err = chromeSession.DoNavigate(ts.URL)
 		if err != nil {
 			t.Errorf("Navigate() error: %v", err)
 		}
 
-		err = chromeSession.WaitVisible("h1")
+		err = chromeSession.DoWaitVisible("h1")
 		if err != nil {
 			t.Errorf("WaitVisible() error: %v", err)
 		}
 
-		err = chromeSession.Click("a")
+		err = chromeSession.DoClick("a")
 		if err != nil {
 			t.Errorf("Click() error: %v", err)
 		}
 
-		err = chromeSession.WaitVisible("#btn")
+		err = chromeSession.DoWaitVisible("#btn")
 		if err != nil {
 			t.Errorf("WaitVisible() error: %v", err)
 		}
@@ -386,22 +386,22 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		}
 
 		// Replay the same series of actions
-		err = chromeSession.Navigate("http://should-not-be-used")
+		err = chromeSession.DoNavigate("http://should-not-be-used")
 		if err != nil {
 			t.Errorf("Navigate() in replay mode error: %v", err)
 		}
 
-		err = chromeSession.WaitVisible("h1")
+		err = chromeSession.DoWaitVisible("h1")
 		if err != nil {
 			t.Errorf("WaitVisible() in replay mode error: %v", err)
 		}
 
-		err = chromeSession.Click("a")
+		err = chromeSession.DoClick("a")
 		if err != nil {
 			t.Errorf("Click() in replay mode error: %v", err)
 		}
 
-		err = chromeSession.WaitVisible("#btn")
+		err = chromeSession.DoWaitVisible("#btn")
 		if err != nil {
 			t.Errorf("WaitVisible() in replay mode error: %v", err)
 		}
@@ -444,7 +444,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		// Remove one of the saved files to test error handling
 		os.Remove(path.Join(dir, sessionName, "1.html"))
 
-		err = chromeSession.Navigate("http://should-not-be-used")
+		err = chromeSession.DoNavigate("http://should-not-be-used")
 		if err == nil {
 			t.Error("Expected error when replay file not found, got nil")
 		}

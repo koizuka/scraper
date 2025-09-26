@@ -110,14 +110,14 @@ func TestUnifiedInterface(t *testing.T) {
 			defer tc.cleanup()
 
 			// Test Navigation
-			err := scraper.Navigate(server.URL)
+			err := scraper.DoNavigate(server.URL)
 			if err != nil {
 				t.Errorf("Navigate() error = %v", err)
 				return
 			}
 
 			// Test WaitVisible (should be no-op for HTTP, actual wait for Chrome)
-			err = scraper.WaitVisible("h1")
+			err = scraper.DoWaitVisible("h1")
 			if err != nil {
 				t.Errorf("WaitVisible() error = %v", err)
 			}
@@ -191,18 +191,18 @@ func TestUnifiedFormOperations(t *testing.T) {
 	scraper := UnifiedScraper(session)
 
 	// Navigate to test page
-	err := scraper.Navigate(server.URL)
+	err := scraper.DoNavigate(server.URL)
 	if err != nil {
 		t.Fatalf("Navigate() error = %v", err)
 	}
 
 	// Test SendKeys
-	err = scraper.SendKeys("input[name=username]", "testuser")
+	err = scraper.DoSendKeys("input[name=username]", "testuser")
 	if err != nil {
 		t.Errorf("SendKeys() error = %v", err)
 	}
 
-	err = scraper.SendKeys("input[name=password]", "testpass")
+	err = scraper.DoSendKeys("input[name=password]", "testpass")
 	if err != nil {
 		t.Errorf("SendKeys() error = %v", err)
 	}
@@ -238,7 +238,7 @@ func TestUnifiedErrorHandling(t *testing.T) {
 	scraper := UnifiedScraper(session)
 
 	// Test clicking without navigation
-	err := scraper.Click(".nonexistent")
+	err := scraper.DoClick(".nonexistent")
 	if err == nil {
 		t.Error("Click() should return error when no page is loaded")
 	}
@@ -279,7 +279,7 @@ func TestUnifiedThreadSafety(t *testing.T) {
 	scraper := UnifiedScraper(session)
 
 	// Navigate once
-	err := scraper.Navigate(server.URL)
+	err := scraper.DoNavigate(server.URL)
 	if err != nil {
 		t.Fatalf("Navigate() error = %v", err)
 	}
@@ -290,7 +290,7 @@ func TestUnifiedThreadSafety(t *testing.T) {
 		go func(i int) {
 			defer func() { done <- true }()
 
-			err := scraper.SendKeys("input[name=username]", Sprintf("user%d", i))
+			err := scraper.DoSendKeys("input[name=username]", Sprintf("user%d", i))
 			if err != nil {
 				t.Errorf("SendKeys() error = %v", err)
 			}

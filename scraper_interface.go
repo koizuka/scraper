@@ -19,21 +19,21 @@ const (
 // Example usage:
 //
 //	var scraper UnifiedScraper = session // or chromeSession
-//	err := scraper.Navigate("https://example.com")
-//	err = scraper.WaitVisible(".content")
+//	err := scraper.DoNavigate("https://example.com")
+//	err = scraper.DoWaitVisible(".content")
 //	data, err := scraper.SavePage()
 //
 // The interface abstracts the differences between HTTP and browser-based scraping:
-// - HTTP scraping: WaitVisible is a no-op, form operations are simulated
+// - HTTP scraping: DoWaitVisible is a no-op, form operations are simulated
 // - Chrome scraping: Full browser automation with real user interactions
 type UnifiedScraper interface {
 	// Navigation methods
-	Navigate(url string) error
-	WaitVisible(selector string) error
+	DoNavigate(url string) error
+	DoWaitVisible(selector string) error
 
 	// Form interaction methods
-	SendKeys(selector, value string) error
-	Click(selector string) error
+	DoSendKeys(selector, value string) error
+	DoClick(selector string) error
 	SubmitForm(formSelector string, params map[string]string) error
 	FollowAnchor(text string) error
 

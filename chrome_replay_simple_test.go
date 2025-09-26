@@ -70,7 +70,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		}
 
 		start := time.Now()
-		err = chromeSession.Sleep(5 * time.Second)
+		err = chromeSession.DoSleep(5 * time.Second)
 		elapsed := time.Since(start)
 
 		if err != nil {

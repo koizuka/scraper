@@ -204,10 +204,10 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			name string
 			op   func() error
 		}{
-			{"Navigate", func() error { return chromeSession.Navigate("http://example.com") }},
-			{"WaitVisible", func() error { return chromeSession.WaitVisible("#test") }},
-			{"Click", func() error { return chromeSession.Click("#button") }},
-			{"SendKeys", func() error { return chromeSession.SendKeys("#input", "test") }},
+			{"Navigate", func() error { return chromeSession.DoNavigate("http://example.com") }},
+			{"WaitVisible", func() error { return chromeSession.DoWaitVisible("#test") }},
+			{"Click", func() error { return chromeSession.DoClick("#button") }},
+			{"SendKeys", func() error { return chromeSession.DoSendKeys("#input", "test") }},
 		}
 
 		for i, test := range operations {

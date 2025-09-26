@@ -130,7 +130,10 @@ func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
 
 	// Load the temp file using file:// protocol with absolute path
 	fileURL := "file://" + absPath
-	err = chromedp.Run(session.Ctx, chromedp.Navigate(fileURL))
+	err = chromedp.Run(session.Ctx,
+		chromedp.Navigate(fileURL),
+		// Wait for the DOM to be ready after navigation
+		chromedp.WaitReady("body", chromedp.ByQuery))
 	if err != nil {
 		return fmt.Errorf("failed to load HTML into browser: %w", err)
 	}

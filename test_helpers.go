@@ -3,6 +3,7 @@ package scraper
 import (
 	"github.com/chromedp/chromedp"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,10 @@ func getCICompatibleChromeOptions() []chromedp.ExecAllocatorOption {
 			chromedp.Flag("disable-extensions", true),
 			chromedp.Flag("disable-default-apps", true),
 			chromedp.Flag("disable-web-security", true),
+			chromedp.Flag("disable-blink-features", "AutomationControlled"),
+			chromedp.Flag("single-process", true),
+			// Increase WebSocket URL read timeout for Chrome startup in CI
+			chromedp.WSURLReadTimeout(60*time.Second),
 		)
 	}
 
@@ -45,4 +50,39 @@ func NewTestChromeOptionsWithTimeout(headless bool, timeout time.Duration) NewCh
 		Timeout:           timeout,
 		ExtraAllocOptions: getCICompatibleChromeOptions(),
 	}
+}
+
+// NewChromeWithRetry creates a new Chrome session with retry logic for startup failures.
+// This helper is specifically designed to handle flaky Chrome startup issues in CI environments.
+func NewChromeWithRetry(session *Session, options NewChromeOptions, maxRetries int) (*ChromeSession, func(), error) {
+	var chromeSession *ChromeSession
+	var cancelFunc func()
+	var err error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		chromeSession, cancelFunc, err = session.NewChromeOpt(options)
+		if err == nil {
+			return chromeSession, cancelFunc, nil
+		}
+
+		// Check if it's a websocket timeout error that we should retry
+		if strings.Contains(err.Error(), "websocket url timeout reached") {
+			if cancelFunc != nil {
+				cancelFunc()
+			}
+			if attempt < maxRetries {
+				// Wait a bit before retrying
+				time.Sleep(time.Duration(attempt+1) * time.Second)
+				continue
+			}
+		}
+
+		// For other errors or if we've exhausted retries, return the error
+		if cancelFunc != nil {
+			cancelFunc()
+		}
+		return nil, func() {}, err
+	}
+
+	return chromeSession, cancelFunc, err
 }

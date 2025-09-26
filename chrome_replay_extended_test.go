@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 )
 
 func TestChromeSession_ReplayExtended(t *testing.T) {
@@ -27,7 +28,11 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		// Create the expected saved file
 		session.invokeCount = 1
@@ -49,7 +54,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		}
 
 		action := chromeSession.SaveFile(&sourceFile)
-		err = action(context.Background())
+		err = action(chromeSession.Ctx)
 		if err != nil {
 			t.Errorf("SaveFile() in replay mode error: %v", err)
 			return
@@ -75,11 +80,15 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		// Test SaveHtml with missing file
 		action := chromeSession.SaveHtml(nil)
-		err = action.Do(context.Background())
+		err = action.Do(chromeSession.Ctx)
 
 		var retryErr RetryAndRecordError
 		if err == nil {
@@ -110,7 +119,11 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		// Create multiple mock HTML files
 		for i := 1; i <= 3; i++ {
@@ -129,7 +142,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		// Call SaveHtml multiple times and verify counter increments
 		for i := 1; i <= 3; i++ {
 			action := chromeSession.SaveHtml(nil)
-			err = action.Do(context.Background())
+			err = action.Do(chromeSession.Ctx)
 			if err != nil {
 				t.Errorf("SaveHtml() call %d error: %v", i, err)
 				return
@@ -160,7 +173,11 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		// Create mock HTML files for each operation
 		for i := 1; i <= 4; i++ {
@@ -220,7 +237,11 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		// Create mock HTML files
 		for i := 1; i <= 2; i++ {
@@ -335,7 +356,11 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{Session: session}
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
 
 		// Create a cancelled context
 		ctx, cancel := context.WithCancel(context.Background())

@@ -90,6 +90,62 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 	return chromeSession, cancelFunc, nil
 }
 
+// loadSavedHTMLToBrowser loads saved HTML content into the browser for replay mode
+func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
+	// Read the saved HTML file
+	htmlBytes, err := os.ReadFile(filename)
+	if err != nil {
+		return RetryAndRecordError{filename}
+	}
+
+	html := string(htmlBytes)
+
+	// Try to load metadata for URL information
+	metadata, err := loadPageMetadata(filename)
+	if err != nil {
+		// If metadata is not available, just load the HTML without URL context
+		session.Printf("Warning: failed to load metadata for %s: %v", filename, err)
+		metadata = PageMetadata{URL: "about:blank"}
+	}
+
+	// Load HTML into browser by writing to a temp file and loading it
+	// This avoids URL encoding issues that occur with data: URIs
+	tempFile := filename + ".temp.html"
+	err = os.WriteFile(tempFile, htmlBytes, DefaultFilePermission)
+	if err != nil {
+		return fmt.Errorf("failed to create temp HTML file: %w", err)
+	}
+	defer os.Remove(tempFile)
+
+	// Get absolute path for the temp file
+	absPath, err := filepath.Abs(tempFile)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Load the temp file using file:// protocol with absolute path
+	fileURL := "file://" + absPath
+	err = chromedp.Run(session.Ctx, chromedp.Navigate(fileURL))
+	if err != nil {
+		return fmt.Errorf("failed to load HTML into browser: %w", err)
+	}
+
+	// Set the URL context in browser if we have valid metadata
+	if metadata.URL != "" && metadata.URL != "about:blank" {
+		// Use JavaScript to update the browser's location context for debugging
+		// Note: This won't actually change the URL bar but helps with relative URL resolution
+		script := fmt.Sprintf(`
+			// Store original URL in a global variable for reference
+			window.__replayOriginalURL = %q;
+			// Update document.baseURI if possible (read-only in most browsers)
+		`, metadata.URL)
+		_ = chromedp.Run(session.Ctx, chromedp.Evaluate(script, nil))
+	}
+
+	session.Printf("%s REPLAY LOADED: %s (%d bytes)", session.getDebugPrefix(), filename, len(html))
+	return nil
+}
+
 func (session *Session) NewChrome() (*ChromeSession, context.CancelFunc, error) {
 	return session.NewChromeOpt(NewChromeOptions{Headless: false})
 }
@@ -104,13 +160,15 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action {
 		}
 
 		if session.NotUseNetwork {
-			// Replay mode: load from saved file
+			// Replay mode: load from saved file and load it into the browser
 			session.Printf("%s LOAD from %v\n", session.getDebugPrefix(), fn)
-			body, err := os.ReadFile(fn)
+
+			// Load the saved HTML into the browser so DOM operations work
+			err := session.loadSavedHTMLToBrowser(fn)
 			if err != nil {
-				return RetryAndRecordError{fn}
+				return err
 			}
-			session.Printf("%s LOADED %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
+
 			return nil
 		} else {
 			// Record mode: get HTML from browser and save
@@ -423,7 +481,8 @@ func (session *ChromeSession) GetCurrentURL() (string, error) {
 // Navigate implements UnifiedScraper.Navigate
 func (chromeSession *ChromeSession) Navigate(url string) error {
 	if chromeSession.NotUseNetwork {
-		// Replay mode: just call SaveHtml to increment counter
+		// Replay mode: increment counter and load saved HTML
+		// This simulates navigation by loading the next saved page
 		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
 	} else {
 		// Record mode: perform actual navigation
@@ -434,8 +493,24 @@ func (chromeSession *ChromeSession) Navigate(url string) error {
 // WaitVisible implements UnifiedScraper.WaitVisible
 func (chromeSession *ChromeSession) WaitVisible(selector string) error {
 	if chromeSession.NotUseNetwork {
-		// Replay mode: just call SaveHtml to increment counter
-		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+		// Replay mode: load saved HTML first, then check if element is visible
+		err := chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
+		if err != nil {
+			return err
+		}
+
+		// Now verify the element exists in the loaded HTML using a simple existence check
+		// In replay mode, we just need to verify the element exists rather than waiting for visibility
+		var result bool
+		err = chromedp.Run(chromeSession.Ctx,
+			chromedp.Evaluate(fmt.Sprintf("document.querySelector(%q) !== null", selector), &result))
+		if err != nil {
+			return fmt.Errorf("failed to check element visibility in replay mode: %w", err)
+		}
+		if !result {
+			return fmt.Errorf("element %q not visible in replay mode", selector)
+		}
+		return nil
 	} else {
 		// Record mode: perform actual wait
 		return chromedp.Run(chromeSession.Ctx, chromedp.WaitVisible(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
@@ -445,7 +520,7 @@ func (chromeSession *ChromeSession) WaitVisible(selector string) error {
 // SendKeys implements UnifiedScraper.SendKeys
 func (chromeSession *ChromeSession) SendKeys(selector, value string) error {
 	if chromeSession.NotUseNetwork {
-		// Replay mode: just call SaveHtml to increment counter
+		// Replay mode: simulate action by loading next saved page
 		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
 	} else {
 		// Record mode: perform actual key sending
@@ -456,7 +531,7 @@ func (chromeSession *ChromeSession) SendKeys(selector, value string) error {
 // Click implements UnifiedScraper.Click
 func (chromeSession *ChromeSession) Click(selector string) error {
 	if chromeSession.NotUseNetwork {
-		// Replay mode: just call SaveHtml to increment counter
+		// Replay mode: simulate click action by loading next saved page
 		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
 	} else {
 		// Record mode: perform actual click
@@ -467,7 +542,7 @@ func (chromeSession *ChromeSession) Click(selector string) error {
 // SubmitForm implements UnifiedScraper.SubmitForm
 func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[string]string) error {
 	if chromeSession.NotUseNetwork {
-		// Replay mode: just call SaveHtml to increment counter
+		// Replay mode: simulate form submission by loading next saved page
 		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
 	} else {
 		// Record mode: perform actual form submission
@@ -521,7 +596,7 @@ func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[s
 // FollowAnchor implements UnifiedScraper.FollowAnchor
 func (chromeSession *ChromeSession) FollowAnchor(text string) error {
 	if chromeSession.NotUseNetwork {
-		// Replay mode: just call SaveHtml to increment counter
+		// Replay mode: simulate anchor following by loading next saved page
 		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
 	} else {
 		// Record mode: perform actual anchor follow

@@ -3,6 +3,7 @@ package scraper
 import (
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,9 +133,21 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 			return
 		}
 
-		expectedFilename := mockFile
-		if filename != expectedFilename {
-			t.Errorf("Expected filename %v, got %v", expectedFilename, filename)
+		// Check that the filename ends with the expected path (may be absolute)
+		expectedSuffix := path.Join("chrome", "test.txt")
+		if !strings.HasSuffix(filename, expectedSuffix) {
+			t.Errorf("Expected filename to end with %v, got %v", expectedSuffix, filename)
+			return
+		}
+
+		// Verify the file actually exists and has correct content
+		content, err := os.ReadFile(filename)
+		if err != nil {
+			t.Errorf("Failed to read downloaded file: %v", err)
+			return
+		}
+		if string(content) != "mock download content" {
+			t.Errorf("Expected file content 'mock download content', got %q", string(content))
 			return
 		}
 	})

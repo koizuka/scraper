@@ -183,7 +183,13 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		for i := 1; i <= 4; i++ {
 			session.invokeCount = i
 			htmlFile := session.getHtmlFilename()
-			mockHTML := `<html><body>Mock HTML for operation ` + string(rune('0'+i)) + `</body></html>`
+			// Include elements that tests will look for
+			mockHTML := `<html><body>
+				<div id="test">Test Element</div>
+				<button id="button">Click Me</button>
+				<input id="input" type="text" />
+				<p>Mock HTML for operation ` + string(rune('0'+i)) + `</p>
+			</body></html>`
 			err = os.WriteFile(htmlFile, []byte(mockHTML), 0644)
 			if err != nil {
 				t.Error(err)

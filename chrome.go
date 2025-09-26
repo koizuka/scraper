@@ -486,64 +486,72 @@ func (session *ChromeSession) GetCurrentURL() (string, error) {
 
 // UnifiedScraper interface implementation for ChromeSession
 
-// Navigate implements UnifiedScraper.Navigate
-func (chromeSession *ChromeSession) Navigate(url string) error {
-	if chromeSession.NotUseNetwork {
-		// Replay mode: increment counter and load saved HTML
-		// This simulates navigation by loading the next saved page
-		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
-	} else {
-		// Record mode: perform actual navigation
-		return chromedp.Run(chromeSession.Ctx, chromedp.Navigate(url), chromeSession.SaveHtml(nil))
+// Navigate returns an ActionFunc that handles navigation with replay support
+func (chromeSession *ChromeSession) Navigate(url string) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		if chromeSession.NotUseNetwork {
+			// Replay mode: increment counter and load saved HTML
+			// This simulates navigation by loading the next saved page
+			return chromeSession.SaveHtml(nil).Do(ctx)
+		} else {
+			// Record mode: perform actual navigation
+			return chromedp.Run(ctx, chromedp.Navigate(url), chromeSession.SaveHtml(nil))
+		}
 	}
 }
 
-// WaitVisible implements UnifiedScraper.WaitVisible
-func (chromeSession *ChromeSession) WaitVisible(selector string) error {
-	if chromeSession.NotUseNetwork {
-		// Replay mode: load saved HTML first, then check if element is visible
-		err := chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
-		if err != nil {
-			return err
-		}
+// WaitVisible returns an ActionFunc that handles wait visible with replay support
+func (chromeSession *ChromeSession) WaitVisible(selector string) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		if chromeSession.NotUseNetwork {
+			// Replay mode: load saved HTML first, then check if element is visible
+			err := chromeSession.SaveHtml(nil).Do(ctx)
+			if err != nil {
+				return err
+			}
 
-		// Now verify the element exists in the loaded HTML using a simple existence check
-		// In replay mode, we just need to verify the element exists rather than waiting for visibility
-		var result bool
-		err = chromedp.Run(chromeSession.Ctx,
-			chromedp.Evaluate(fmt.Sprintf("document.querySelector(%q) !== null", selector), &result))
-		if err != nil {
-			return fmt.Errorf("failed to check element visibility in replay mode: %w", err)
+			// Now verify the element exists in the loaded HTML using a simple existence check
+			// In replay mode, we just need to verify the element exists rather than waiting for visibility
+			var result bool
+			err = chromedp.Run(ctx,
+				chromedp.Evaluate(fmt.Sprintf("document.querySelector(%q) !== null", selector), &result))
+			if err != nil {
+				return fmt.Errorf("failed to check element visibility in replay mode: %w", err)
+			}
+			if !result {
+				return fmt.Errorf("element %q not visible in replay mode", selector)
+			}
+			return nil
+		} else {
+			// Record mode: perform actual wait
+			return chromedp.Run(ctx, chromedp.WaitVisible(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
 		}
-		if !result {
-			return fmt.Errorf("element %q not visible in replay mode", selector)
-		}
-		return nil
-	} else {
-		// Record mode: perform actual wait
-		return chromedp.Run(chromeSession.Ctx, chromedp.WaitVisible(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
 	}
 }
 
-// SendKeys implements UnifiedScraper.SendKeys
-func (chromeSession *ChromeSession) SendKeys(selector, value string) error {
-	if chromeSession.NotUseNetwork {
-		// Replay mode: simulate action by loading next saved page
-		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
-	} else {
-		// Record mode: perform actual key sending
-		return chromedp.Run(chromeSession.Ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+// SendKeys returns an ActionFunc that handles sending keys with replay support
+func (chromeSession *ChromeSession) SendKeys(selector, value string) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		if chromeSession.NotUseNetwork {
+			// Replay mode: simulate action by loading next saved page
+			return chromeSession.SaveHtml(nil).Do(ctx)
+		} else {
+			// Record mode: perform actual key sending
+			return chromedp.Run(ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+		}
 	}
 }
 
-// Click implements UnifiedScraper.Click
-func (chromeSession *ChromeSession) Click(selector string) error {
-	if chromeSession.NotUseNetwork {
-		// Replay mode: simulate click action by loading next saved page
-		return chromeSession.SaveHtml(nil).Do(chromeSession.Ctx)
-	} else {
-		// Record mode: perform actual click
-		return chromedp.Run(chromeSession.Ctx, chromedp.Click(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+// Click returns an ActionFunc that handles clicking with replay support
+func (chromeSession *ChromeSession) Click(selector string) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		if chromeSession.NotUseNetwork {
+			// Replay mode: simulate click action by loading next saved page
+			return chromeSession.SaveHtml(nil).Do(ctx)
+		} else {
+			// Record mode: perform actual click
+			return chromedp.Run(ctx, chromedp.Click(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
+		}
 	}
 }
 
@@ -714,17 +722,44 @@ func (chromeSession *ChromeSession) Printf(format string, a ...interface{}) {
 	chromeSession.Session.Printf(format, a...)
 }
 
-// Sleep waits for the specified duration in record mode, or skips waiting in replay mode.
+// Sleep returns an ActionFunc that handles sleeping with replay support.
 // In replay mode, this method returns immediately without actual waiting, which speeds up test execution.
 // In record mode, this method performs the actual sleep operation using chromedp.Sleep.
-func (chromeSession *ChromeSession) Sleep(duration time.Duration) error {
-	if chromeSession.NotUseNetwork {
-		// Replay mode: don't wait real time, just log
-		chromeSession.Printf("%s REPLAY SLEEP: skipping %v\n", chromeSession.getDebugPrefix(), duration)
-		return nil
-	} else {
-		// Record mode: perform actual sleep
-		chromeSession.Printf("%s SLEEP: %v\n", chromeSession.getDebugPrefix(), duration)
-		return chromedp.Run(chromeSession.Ctx, chromedp.Sleep(duration))
+func (chromeSession *ChromeSession) Sleep(duration time.Duration) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		if chromeSession.NotUseNetwork {
+			// Replay mode: don't wait real time, just log
+			chromeSession.Printf("%s REPLAY SLEEP: skipping %v\n", chromeSession.getDebugPrefix(), duration)
+			return nil
+		} else {
+			// Record mode: perform actual sleep
+			chromeSession.Printf("%s SLEEP: %v\n", chromeSession.getDebugPrefix(), duration)
+			return chromedp.Run(ctx, chromedp.Sleep(duration))
+		}
 	}
+}
+
+// DoNavigate implements UnifiedScraper.Navigate
+func (chromeSession *ChromeSession) DoNavigate(url string) error {
+	return chromeSession.Navigate(url).Do(chromeSession.Ctx)
+}
+
+// DoWaitVisible implements UnifiedScraper.WaitVisible
+func (chromeSession *ChromeSession) DoWaitVisible(selector string) error {
+	return chromeSession.WaitVisible(selector).Do(chromeSession.Ctx)
+}
+
+// DoSendKeys implements UnifiedScraper.SendKeys
+func (chromeSession *ChromeSession) DoSendKeys(selector, value string) error {
+	return chromeSession.SendKeys(selector, value).Do(chromeSession.Ctx)
+}
+
+// DoClick implements UnifiedScraper.Click
+func (chromeSession *ChromeSession) DoClick(selector string) error {
+	return chromeSession.Click(selector).Do(chromeSession.Ctx)
+}
+
+// DoSleep is a convenience method for executing Sleep action
+func (chromeSession *ChromeSession) DoSleep(duration time.Duration) error {
+	return chromeSession.Sleep(duration).Do(chromeSession.Ctx)
 }

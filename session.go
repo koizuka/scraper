@@ -700,3 +700,23 @@ func extractNameFromSelector(selector string) string {
 // SetDebugStep implements UnifiedScraper.SetDebugStep - already exists
 
 // ClearDebugStep implements UnifiedScraper.ClearDebugStep - already exists
+
+// DoNavigate implements UnifiedScraper.DoNavigate
+func (session *Session) DoNavigate(url string) error {
+	return session.Navigate(url)
+}
+
+// DoWaitVisible implements UnifiedScraper.DoWaitVisible
+func (session *Session) DoWaitVisible(selector string) error {
+	return session.WaitVisible(selector)
+}
+
+// DoSendKeys implements UnifiedScraper.DoSendKeys
+func (session *Session) DoSendKeys(selector, value string) error {
+	return session.SendKeys(selector, value)
+}
+
+// DoClick implements UnifiedScraper.DoClick
+func (session *Session) DoClick(selector string) error {
+	return session.Click(selector)
+}

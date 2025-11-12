@@ -1,6 +1,9 @@
 package scraper
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type RetryAndRecordError struct {
 	Filename string
@@ -36,4 +39,17 @@ type MaintenanceError struct {
 
 func (error MaintenanceError) Error() string {
 	return fmt.Sprintf("Service is under maintenance. %v", error.Message)
+}
+
+type ChromeTimeoutError struct {
+	OriginalError error
+	Duration      time.Duration
+}
+
+func (error ChromeTimeoutError) Error() string {
+	return fmt.Sprintf("Chrome operation timed out after %v: %v", error.Duration, error.OriginalError)
+}
+
+func (error ChromeTimeoutError) Unwrap() error {
+	return error.OriginalError
 }

@@ -47,9 +47,23 @@ func NewTestChromeOptions(headless bool) NewChromeOptions {
 func NewTestChromeOptionsWithTimeout(headless bool, timeout time.Duration) NewChromeOptions {
 	return NewChromeOptions{
 		Headless:          headless,
-		Timeout:           timeout,
+		Timeout:           getCIMinTimeout(timeout),
 		ExtraAllocOptions: getCICompatibleChromeOptions(),
 	}
+}
+
+// getCIMinTimeout ensures that CI environments have ample time to launch Chrome,
+// which is slower on shared runners. Local runs retain their requested timeout.
+func getCIMinTimeout(requested time.Duration) time.Duration {
+	if requested == 0 || os.Getenv("CI") != "true" {
+		return requested
+	}
+
+	const minCITimeout = 90 * time.Second
+	if requested < minCITimeout {
+		return minCITimeout
+	}
+	return requested
 }
 
 // NewChromeWithRetry creates a new Chrome session with retry logic for startup failures.

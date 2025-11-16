@@ -54,6 +54,7 @@ func NewTestChromeOptionsWithTimeout(headless bool, timeout time.Duration) NewCh
 
 // getCIMinTimeout ensures that CI environments have ample time to launch Chrome,
 // which is slower on shared runners. Local runs retain their requested timeout.
+// A zero duration still means “no timeout” even in CI, so we skip adjustments.
 func getCIMinTimeout(requested time.Duration) time.Duration {
 	if requested == 0 || os.Getenv("CI") != "true" {
 		return requested

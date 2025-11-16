@@ -50,14 +50,18 @@ func (session *ChromeSession) captureCurrentHtml(ctx context.Context) {
 	}
 }
 
-// SaveLastHtmlSnapshot saves the last HTML content to snapshot file
+// SaveLastHtmlSnapshot saves the last HTML content to a timestamped snapshot file
 // This is useful for debugging timeouts - call this when an error occurs
+// Multiple snapshots are preserved to track timeout sequences
 func (session *ChromeSession) SaveLastHtmlSnapshot() error {
 	if session.lastHtml == "" {
 		return nil // Nothing to save
 	}
 
-	filename := session.getSnapshotFilename()
+	// Use timestamp to avoid overwriting previous snapshots
+	timestamp := time.Now().Format("20060102-150405")
+	filename := path.Join(session.getDirectory(), fmt.Sprintf("snapshot-%s.html", timestamp))
+
 	err := os.WriteFile(filename, []byte(session.lastHtml), DefaultFilePermission)
 	if err != nil {
 		return fmt.Errorf("failed to save snapshot: %w", err)

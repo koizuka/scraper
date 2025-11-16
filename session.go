@@ -144,15 +144,6 @@ func (session *Session) getHtmlFilename() string {
 	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.invokeCount))
 }
 
-func (session *Session) getSnapshotFilename() string {
-	return path.Join(session.getDirectory(), "snapshot.html")
-}
-
-// GetSnapshotFilename returns the path for the snapshot file
-func (session *Session) GetSnapshotFilename() string {
-	return session.getSnapshotFilename()
-}
-
 func (session *Session) invoke(req *http.Request) (*Response, error) {
 	var body []byte
 	var contentType string

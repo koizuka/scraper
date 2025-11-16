@@ -511,14 +511,29 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 			t.Fatalf("SaveLastHtmlSnapshot() error: %v", err)
 		}
 
-		// Verify snapshot file exists and contains correct content
-		snapshotPath := chromeSession.GetSnapshotFilename()
-		content, err := os.ReadFile(snapshotPath)
+		// Verify timestamped snapshot file exists and contains correct content
+		// The file should be named like snapshot-20250116-150405.html
+		files, err := os.ReadDir(chromeSession.GetDirectory())
 		if err != nil {
-			t.Fatalf("Failed to read snapshot: %v", err)
+			t.Fatalf("Failed to read directory: %v", err)
 		}
-		if !strings.Contains(string(content), "Test Page") {
-			t.Error("Snapshot should contain 'Test Page'")
+
+		var snapshotFound bool
+		for _, file := range files {
+			if strings.HasPrefix(file.Name(), "snapshot-") && strings.HasSuffix(file.Name(), ".html") {
+				content, err := os.ReadFile(path.Join(chromeSession.GetDirectory(), file.Name()))
+				if err != nil {
+					t.Fatalf("Failed to read snapshot: %v", err)
+				}
+				if !strings.Contains(string(content), "Test Page") {
+					t.Error("Snapshot should contain 'Test Page'")
+				}
+				snapshotFound = true
+				break
+			}
+		}
+		if !snapshotFound {
+			t.Error("No timestamped snapshot file found")
 		}
 	})
 

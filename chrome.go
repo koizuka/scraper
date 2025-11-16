@@ -350,6 +350,10 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					}
 				}
 			})
+
+			// Capture current HTML before action (for debugging timeouts)
+			session.captureCurrentHtml(ctxt)
+
 			err := chromedp.Run(ctxt, actions...)
 			if err != nil && !strings.Contains(err.Error(), "net::ERR_ABORTED") {
 				return err

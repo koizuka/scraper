@@ -135,8 +135,22 @@ func (session *Session) getDirectory() string {
 	return fmt.Sprintf("%v%v", session.FilePrefix, session.Name)
 }
 
+// GetDirectory returns the directory path for this session's files
+func (session *Session) GetDirectory() string {
+	return session.getDirectory()
+}
+
 func (session *Session) getHtmlFilename() string {
 	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.invokeCount))
+}
+
+func (session *Session) getSnapshotFilename() string {
+	return path.Join(session.getDirectory(), "snapshot.html")
+}
+
+// GetSnapshotFilename returns the path for the snapshot file
+func (session *Session) GetSnapshotFilename() string {
+	return session.getSnapshotFilename()
 }
 
 func (session *Session) invoke(req *http.Request) (*Response, error) {

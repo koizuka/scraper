@@ -455,3 +455,86 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		}
 	})
 }
+
+func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
+	t.Run("captures and saves HTML snapshot", func(t *testing.T) {
+		// Create a simple test server
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprint(w, "<html><body><h1>Test Page</h1></body></html>")
+		}))
+		defer ts.Close()
+
+		dir, err := os.MkdirTemp(".", "chrome_snapshot_test*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.RemoveAll(dir) }()
+
+		sessionName := "chrome_snapshot_test"
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		logger := BufferedLogger{}
+		session := NewSession(sessionName, &logger)
+		session.FilePrefix = dir + "/"
+
+		chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+		defer cancelFunc()
+		if err != nil {
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		// Navigate to page
+		err = chromeSession.DoNavigate(ts.URL)
+		if err != nil {
+			t.Fatalf("Navigate() error: %v", err)
+		}
+
+		// Manually capture HTML (simulating what happens before operations)
+		var html string
+		err = chromedp.Run(chromeSession.Ctx, chromedp.OuterHTML("html", &html, chromedp.ByQuery))
+		if err != nil {
+			t.Fatalf("OuterHTML() error: %v", err)
+		}
+		chromeSession.lastHtml = html
+
+		// Verify lastHtml contains expected content
+		if !strings.Contains(chromeSession.lastHtml, "Test Page") {
+			t.Error("lastHtml should contain 'Test Page'")
+		}
+
+		// Save snapshot
+		err = chromeSession.SaveLastHtmlSnapshot()
+		if err != nil {
+			t.Fatalf("SaveLastHtmlSnapshot() error: %v", err)
+		}
+
+		// Verify snapshot file exists and contains correct content
+		snapshotPath := chromeSession.GetSnapshotFilename()
+		content, err := os.ReadFile(snapshotPath)
+		if err != nil {
+			t.Fatalf("Failed to read snapshot: %v", err)
+		}
+		if !strings.Contains(string(content), "Test Page") {
+			t.Error("Snapshot should contain 'Test Page'")
+		}
+	})
+
+	t.Run("handles empty lastHtml gracefully", func(t *testing.T) {
+		logger := BufferedLogger{}
+		session := NewSession("test", &logger)
+
+		chromeSession := &ChromeSession{
+			Session:  session,
+			lastHtml: "", // Empty
+		}
+
+		// Should not error, just do nothing
+		err := chromeSession.SaveLastHtmlSnapshot()
+		if err != nil {
+			t.Errorf("SaveLastHtmlSnapshot() with empty lastHtml should not error, got: %v", err)
+		}
+	})
+}

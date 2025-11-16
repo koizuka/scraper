@@ -29,6 +29,42 @@ type ChromeSession struct {
 	*Session
 	Ctx          context.Context
 	DownloadPath string
+	lastHtml     string // Last successfully retrieved HTML content
+}
+
+// captureCurrentHtml safely captures the current HTML page content
+// This is called before Chrome operations to preserve state for debugging timeouts
+func (session *ChromeSession) captureCurrentHtml(ctx context.Context) {
+	// Use defer/recover to safely handle any panics from chromedp operations
+	defer func() {
+		if r := recover(); r != nil {
+			// Silently ignore panics - context might not have Chrome executor yet
+		}
+	}()
+
+	var html string
+	// Try to get HTML - this might panic if context doesn't have Chrome executor
+	err := chromedp.OuterHTML("html", &html, chromedp.ByQuery).Do(ctx)
+	if err == nil {
+		session.lastHtml = html
+	}
+}
+
+// SaveLastHtmlSnapshot saves the last HTML content to snapshot file
+// This is useful for debugging timeouts - call this when an error occurs
+func (session *ChromeSession) SaveLastHtmlSnapshot() error {
+	if session.lastHtml == "" {
+		return nil // Nothing to save
+	}
+
+	filename := session.getSnapshotFilename()
+	err := os.WriteFile(filename, []byte(session.lastHtml), DefaultFilePermission)
+	if err != nil {
+		return fmt.Errorf("failed to save snapshot: %w", err)
+	}
+
+	session.Printf("Saved last HTML snapshot to %s\n", filename)
+	return nil
 }
 
 type NewChromeOptions struct {
@@ -75,7 +111,12 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		ctxt, cancel = context.WithTimeout(ctxt, options.Timeout)
 	}
 
-	chromeSession = &ChromeSession{session, ctxt, downloadPath}
+	chromeSession = &ChromeSession{
+		Session:      session,
+		Ctx:          ctxt,
+		DownloadPath: downloadPath,
+		lastHtml:     "", // Initialize with empty string
+	}
 
 	cancelFunc = func() {
 		cancel()
@@ -494,7 +535,10 @@ func (chromeSession *ChromeSession) Navigate(url string) chromedp.ActionFunc {
 			// This simulates navigation by loading the next saved page
 			return chromeSession.SaveHtml(nil).Do(ctx)
 		} else {
-			// Record mode: perform actual navigation
+			// Record mode: capture current HTML before navigation (for debugging timeouts)
+			chromeSession.captureCurrentHtml(ctx)
+
+			// Perform actual navigation
 			return chromedp.Run(ctx, chromedp.Navigate(url), chromeSession.SaveHtml(nil))
 		}
 	}
@@ -523,7 +567,10 @@ func (chromeSession *ChromeSession) WaitVisible(selector string) chromedp.Action
 			}
 			return nil
 		} else {
-			// Record mode: perform actual wait
+			// Record mode: capture current HTML before waiting (for debugging timeouts)
+			chromeSession.captureCurrentHtml(ctx)
+
+			// Perform actual wait
 			return chromedp.Run(ctx, chromedp.WaitVisible(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
 		}
 	}
@@ -536,7 +583,10 @@ func (chromeSession *ChromeSession) SendKeys(selector, value string) chromedp.Ac
 			// Replay mode: simulate action by loading next saved page
 			return chromeSession.SaveHtml(nil).Do(ctx)
 		} else {
-			// Record mode: perform actual key sending
+			// Record mode: capture current HTML before action (for debugging timeouts)
+			chromeSession.captureCurrentHtml(ctx)
+
+			// Perform actual key sending
 			return chromedp.Run(ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery), chromeSession.SaveHtml(nil))
 		}
 	}
@@ -549,7 +599,10 @@ func (chromeSession *ChromeSession) Click(selector string) chromedp.ActionFunc {
 			// Replay mode: simulate click action by loading next saved page
 			return chromeSession.SaveHtml(nil).Do(ctx)
 		} else {
-			// Record mode: perform actual click
+			// Record mode: capture current HTML before action (for debugging timeouts)
+			chromeSession.captureCurrentHtml(ctx)
+
+			// Perform actual click
 			return chromedp.Run(ctx, chromedp.Click(selector, chromedp.ByQuery), chromeSession.SaveHtml(nil))
 		}
 	}

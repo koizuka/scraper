@@ -42,12 +42,19 @@ func (session *ChromeSession) captureCurrentHtml(ctx context.Context) {
 		}
 	}()
 
+	// Use a short timeout to avoid blocking if HTML is not available yet
+	// 2 seconds is enough for already-loaded pages (real usage pattern)
+	// but won't block too long if page hasn't loaded yet (e.g., in tests)
+	captureCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
 	var html string
 	// Try to get HTML - this might panic if context doesn't have Chrome executor
-	err := chromedp.OuterHTML("html", &html, chromedp.ByQuery).Do(ctx)
+	err := chromedp.OuterHTML("html", &html, chromedp.ByQuery).Do(captureCtx)
 	if err == nil {
 		session.lastHtml = html
 	}
+	// Silently ignore errors - HTML might not be available yet
 }
 
 // SaveLastHtmlSnapshot saves the last HTML content to a timestamped snapshot file
@@ -336,6 +343,10 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 
 			startTime := time.Now()
 
+			// Capture current HTML before setting up download listener (for debugging timeouts)
+			// This captures the page state before clicking download button
+			session.captureCurrentHtml(ctxt)
+
 			suggestedFilename := ""
 			chromedp.ListenTarget(downloadCtx, func(ev interface{}) {
 				switch ev := ev.(type) {
@@ -350,9 +361,6 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					}
 				}
 			})
-
-			// Capture current HTML before action (for debugging timeouts)
-			session.captureCurrentHtml(ctxt)
 
 			err := chromedp.Run(ctxt, actions...)
 			if err != nil && !strings.Contains(err.Error(), "net::ERR_ABORTED") {

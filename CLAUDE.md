@@ -26,6 +26,7 @@ This is a Go web scraping library that provides a comprehensive toolkit for web 
    - Manages Chrome user data directory and download handling
    - Provides file download with glob pattern matching
    - Supports both headless and non-headless operation
+   - Supports per-action timeout configuration via ActionTimeout
 
 4. **Form** (`form.go`) - Form handling and submission
    - Parses HTML forms into structured data with validation
@@ -99,6 +100,21 @@ page, err := session.GetPage("https://example.com")
 chromeSession, cancel, err := session.NewChrome()
 defer cancel()
 resp, err := chromeSession.RunNavigate("https://example.com")
+```
+
+### Chrome Automation with Action Timeout
+
+```go
+// Create session with per-action timeout
+chromeSession, cancel, err := session.NewChromeOpt(scraper.NewChromeOptions{
+    ActionTimeout: 5 * time.Second,
+})
+defer cancel()
+
+// Use ActionCtx for individual actions
+actionCtx, actionCancel := chromeSession.ActionCtx()
+defer actionCancel()
+err = chromedp.Run(actionCtx, chromedp.WaitVisible(selector, chromedp.ByQuery))
 ```
 
 ### Data Extraction

@@ -27,9 +27,10 @@ const (
 
 type ChromeSession struct {
 	*Session
-	Ctx          context.Context
-	DownloadPath string
-	lastHtml     string // Last successfully retrieved HTML content
+	Ctx           context.Context
+	DownloadPath  string
+	lastHtml      string        // Last successfully retrieved HTML content
+	ActionTimeout time.Duration // Timeout for individual actions (0 = no timeout)
 }
 
 // captureCurrentHtml safely captures the current HTML page content
@@ -78,9 +79,26 @@ func (session *ChromeSession) SaveLastHtmlSnapshot() error {
 	return nil
 }
 
+// ActionCtx returns a context with ActionTimeout applied if set.
+// Use this for individual chromedp actions that should respect the action timeout.
+// Caller must call the returned cancel function when done.
+//
+// Example:
+//
+//	actionCtx, cancel := chromeSession.ActionCtx()
+//	defer cancel()
+//	err := chromedp.Run(actionCtx, chromedp.WaitVisible(selector, chromedp.ByQuery))
+func (session *ChromeSession) ActionCtx() (context.Context, context.CancelFunc) {
+	if session.ActionTimeout > 0 {
+		return context.WithTimeout(session.Ctx, session.ActionTimeout)
+	}
+	return session.Ctx, func() {}
+}
+
 type NewChromeOptions struct {
 	Headless          bool
 	Timeout           time.Duration
+	ActionTimeout     time.Duration // Timeout for individual actions (0 = no timeout)
 	ExtraAllocOptions []chromedp.ExecAllocatorOption
 }
 
@@ -123,10 +141,11 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 	}
 
 	chromeSession = &ChromeSession{
-		Session:      session,
-		Ctx:          ctxt,
-		DownloadPath: downloadPath,
-		lastHtml:     "", // Initialize with empty string
+		Session:       session,
+		Ctx:           ctxt,
+		DownloadPath:  downloadPath,
+		lastHtml:      "", // Initialize with empty string
+		ActionTimeout: options.ActionTimeout,
 	}
 
 	cancelFunc = func() {

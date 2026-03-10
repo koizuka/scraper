@@ -367,7 +367,9 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 			session.captureCurrentHtml(ctxt)
 
 			suggestedFilename := ""
-			chromedp.ListenTarget(downloadCtx, func(ev interface{}) {
+			// Use ListenBrowser instead of ListenTarget to capture download events
+			// from popup windows opened via window.open()
+			chromedp.ListenBrowser(downloadCtx, func(ev interface{}) {
 				switch ev := ev.(type) {
 				case *browser.EventDownloadWillBegin:
 					suggestedFilename = path.Join(session.DownloadPath, ev.SuggestedFilename)

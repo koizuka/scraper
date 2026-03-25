@@ -27,7 +27,8 @@ const (
 
 type ChromeSession struct {
 	*Session
-	Ctx           context.Context
+	Ctx           context.Context // Operation context (may have timeout applied)
+	BrowserCtx    context.Context // Browser context without timeout (for graceful shutdown)
 	DownloadPath  string
 	lastHtml      string        // Last successfully retrieved HTML content
 	ActionTimeout time.Duration // Timeout for individual actions (0 = no timeout)
@@ -135,21 +136,26 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
 
-	ctxt, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(session.Printf))
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(session.Printf))
+
+	ctxt := browserCtx
+	var timeoutCancel context.CancelFunc = func() {}
 	if options.Timeout != 0 {
-		ctxt, cancel = context.WithTimeout(ctxt, options.Timeout)
+		ctxt, timeoutCancel = context.WithTimeout(browserCtx, options.Timeout)
 	}
 
 	chromeSession = &ChromeSession{
 		Session:       session,
-		Ctx:           ctxt,
+		Ctx:           ctxt,       // Operation context (may have timeout)
+		BrowserCtx:    browserCtx, // Browser context without timeout (for graceful shutdown)
 		DownloadPath:  downloadPath,
-		lastHtml:      "", // Initialize with empty string
+		lastHtml:      "",
 		ActionTimeout: options.ActionTimeout,
 	}
 
 	cancelFunc = func() {
-		cancel()
+		timeoutCancel()
+		browserCancel()
 		allocCancel()
 	}
 

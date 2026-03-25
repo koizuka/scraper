@@ -1,7 +1,6 @@
 package scraper
 
 import (
-	"context"
 	"fmt"
 	"github.com/chromedp/chromedp"
 	"github.com/google/go-cmp/cmp"
@@ -65,25 +64,7 @@ func TestChromeUnmarshal(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// create context with CI-aware Chrome options using test helper
-	testOptions := NewTestChromeOptions(true)
-	allocOptions := []chromedp.ExecAllocatorOption{
-		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
-	}
-	if testOptions.Headless {
-		allocOptions = append(allocOptions,
-			chromedp.Headless,
-			chromedp.DisableGPU,
-		)
-	}
-	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
-	defer allocCancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	ctx := NewTestChromeContext(t, 30*time.Second)
 
 	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -350,25 +331,7 @@ func TestChromeUnmarshalWithUnmarshaller(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// create context with CI-aware Chrome options using test helper
-	testOptions := NewTestChromeOptions(true)
-	allocOptions := []chromedp.ExecAllocatorOption{
-		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
-	}
-	if testOptions.Headless {
-		allocOptions = append(allocOptions,
-			chromedp.Headless,
-			chromedp.DisableGPU,
-		)
-	}
-	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
-	defer allocCancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	ctx := NewTestChromeContext(t, 30*time.Second)
 
 	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -408,25 +371,7 @@ func TestChromeUnmarshalNthChildErrors(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// create context with CI-aware Chrome options using test helper
-	testOptions := NewTestChromeOptions(true)
-	allocOptions := []chromedp.ExecAllocatorOption{
-		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
-	}
-	if testOptions.Headless {
-		allocOptions = append(allocOptions,
-			chromedp.Headless,
-			chromedp.DisableGPU,
-		)
-	}
-	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
-	defer allocCancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	ctx := NewTestChromeContext(t, 30*time.Second)
 
 	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -493,25 +438,7 @@ func TestChromeUnmarshalFirstLastChildSelectors(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// create context with CI-aware Chrome options using test helper
-	testOptions := NewTestChromeOptions(true)
-	allocOptions := []chromedp.ExecAllocatorOption{
-		chromedp.UserDataDir("./chromeUserData"), // Basic user data dir
-	}
-	if testOptions.Headless {
-		allocOptions = append(allocOptions,
-			chromedp.Headless,
-			chromedp.DisableGPU,
-		)
-	}
-	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
-	defer allocCancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	ctx := NewTestChromeContext(t, 30*time.Second)
 
 	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {

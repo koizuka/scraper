@@ -25,6 +25,19 @@ const (
 	DefaultBlankURL = "about:blank"
 )
 
+// ChromeSession holds the state for a Chrome browser session.
+//
+// Ctx is the operation context, which may have a timeout applied.
+// Use Ctx for all normal Chrome operations (navigation, clicks, queries).
+//
+// BrowserCtx is the underlying browser context without timeout.
+// Use BrowserCtx only for graceful shutdown via chromedp.Cancel(),
+// which needs a live context even after session timeout:
+//
+//	defer func() {
+//	    _ = chromedp.Cancel(chromeSession.BrowserCtx)
+//	    cancel()
+//	}()
 type ChromeSession struct {
 	*Session
 	Ctx           context.Context // Operation context (may have timeout applied)

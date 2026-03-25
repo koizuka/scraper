@@ -1,9 +1,11 @@
 package scraper
 
 import (
+	"context"
 	"github.com/chromedp/chromedp"
 	"os"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -65,6 +67,41 @@ func getCIMinTimeout(requested time.Duration) time.Duration {
 		return minCITimeout
 	}
 	return requested
+}
+
+// NewTestChromeContext creates an isolated Chrome browser context for tests.
+// It uses t.TempDir() for the user data directory to avoid conflicts with other
+// Chrome instances, and applies CI-aware timeouts.
+// Cleanup is registered via t.Cleanup, so callers don't need to defer cancel.
+func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
+	t.Helper()
+
+	testOptions := NewTestChromeOptions(true)
+	allocOptions := []chromedp.ExecAllocatorOption{
+		chromedp.UserDataDir(t.TempDir()),
+	}
+	if testOptions.Headless {
+		allocOptions = append(allocOptions, chromedp.Headless, chromedp.DisableGPU)
+	}
+	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
+
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
+
+	effectiveTimeout := getCIMinTimeout(timeout)
+	if effectiveTimeout == 0 {
+		effectiveTimeout = 30 * time.Second
+	}
+	ctx, timeoutCancel := context.WithTimeout(browserCtx, effectiveTimeout)
+
+	t.Cleanup(func() {
+		timeoutCancel()
+		browserCancel()
+		allocCancel()
+	})
+
+	return ctx
 }
 
 // NewChromeWithRetry creates a new Chrome session with retry logic for startup failures.

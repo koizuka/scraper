@@ -407,50 +407,70 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 				return err
 			}
 
-			select {
-			case <-downloadCtx.Done():
-				// browser.DownloadProgressStateCompleted が来なかった場合、新しいファイルがあったらそれを返す
+			// Poll for downloaded file in case browser events don't fire
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+
+			checkDownloadDir := func() (string, *DownloadedFileNameNotSatisfiedError) {
 				files, err := os.ReadDir(session.DownloadPath)
 				if err != nil {
-					return err
+					return "", nil
 				}
-				var matchErr error
-				latestTime := time.Time{}
+				var matchErr *DownloadedFileNameNotSatisfiedError
 				for _, file := range files {
+					// Skip .crdownload files (Chrome partial downloads)
+					if strings.HasSuffix(file.Name(), ".crdownload") {
+						continue
+					}
 					info, err := file.Info()
 					if err != nil {
-						return err
+						continue
 					}
 					if !info.ModTime().Before(startTime) {
 						if match, _ := filepath.Match(options.Glob, file.Name()); match {
-							*filename = path.Join(session.DownloadPath, file.Name())
-							session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
-							return nil
+							return path.Join(session.DownloadPath, file.Name()), nil
 						} else {
-							if info.ModTime().After(latestTime) {
-								latestTime = info.ModTime()
-								matchErr = &DownloadedFileNameNotSatisfiedError{DownloadedFilename: file.Name(), Glob: options.Glob}
-							}
+							matchErr = &DownloadedFileNameNotSatisfiedError{DownloadedFilename: file.Name(), Glob: options.Glob}
 						}
 					}
 				}
-				if matchErr != nil {
-					return matchErr
-				}
-				return downloadCtx.Err()
+				return "", matchErr
+			}
 
-			case downloaded := <-download:
-				if downloaded == "" {
-					return fmt.Errorf("download canceled")
-				}
-				// if downloaded filename is not match to options.Glob pattern, error
-				if match, _ := filepath.Match(options.Glob, filepath.Base(downloaded)); !match {
-					return &DownloadedFileNameNotSatisfiedError{DownloadedFilename: downloaded, Glob: options.Glob}
-				}
+			for {
+				select {
+				case <-downloadCtx.Done():
+					// タイムアウト: ディレクトリにファイルがあればそれを返す
+					if found, matchErr := checkDownloadDir(); found != "" {
+						*filename = found
+						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+						return nil
+					} else if matchErr != nil {
+						return matchErr
+					}
+					return downloadCtx.Err()
 
-				*filename = downloaded
-				session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
-				return nil
+				case <-ticker.C:
+					// ポーリング: ダウンロード完了ファイルがあれば即座に返す
+					if found, _ := checkDownloadDir(); found != "" {
+						*filename = found
+						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+						return nil
+					}
+
+				case downloaded := <-download:
+					if downloaded == "" {
+						return fmt.Errorf("download canceled")
+					}
+					// if downloaded filename is not match to options.Glob pattern, error
+					if match, _ := filepath.Match(options.Glob, filepath.Base(downloaded)); !match {
+						return &DownloadedFileNameNotSatisfiedError{DownloadedFilename: downloaded, Glob: options.Glob}
+					}
+
+					*filename = downloaded
+					session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+					return nil
+				}
 			}
 		}
 	}

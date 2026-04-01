@@ -553,3 +553,149 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 		}
 	})
 }
+
+func TestChromeSession_DownloadFile_Polling(t *testing.T) {
+	// Test that DownloadFile detects files via polling when browser events don't fire.
+	// A normal HTML page (no download) is served, and a file is placed in the download
+	// directory by a goroutine after a delay. The polling should pick it up well before
+	// the timeout expires.
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Serve a normal page, NOT a file download
+		_, _ = fmt.Fprint(w, "<html><body>No download here</body></html>")
+	}))
+	defer ts.Close()
+
+	dir, err := os.MkdirTemp(".", "chrome_poll_test*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	sessionName := "chrome_poll_test"
+	err = os.Mkdir(path.Join(dir, sessionName), 0744)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logger := BufferedLogger{}
+	session := NewSession(sessionName, &logger)
+	session.FilePrefix = dir + "/"
+
+	chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+	defer cancelFunc()
+	if err != nil {
+		t.Fatalf("NewChromeOpt() error: %v", err)
+	}
+
+	// Place a file in the download directory after 2 seconds (simulating download without events)
+	go func() {
+		time.Sleep(2 * time.Second)
+		_ = os.WriteFile(path.Join(chromeSession.DownloadPath, "polled_file.txt"), []byte("polled content"), 0644)
+	}()
+
+	var downloadedFilename string
+	start := time.Now()
+	err = chromedp.Run(chromeSession.Ctx,
+		chromeSession.DownloadFile(&downloadedFilename, DownloadFileOptions{Timeout: 20 * time.Second},
+			chromedp.Navigate(ts.URL), // Navigate to normal page (no download triggered)
+		),
+	)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("DownloadFile() error: %v", err)
+	}
+
+	// Should complete well before the 20s timeout (file appears at ~2s, polling checks every 1s)
+	if elapsed > 10*time.Second {
+		t.Errorf("DownloadFile() took %v, expected < 10s (polling should detect file quickly)", elapsed)
+	}
+
+	// Verify the correct file was found
+	if !strings.Contains(downloadedFilename, "polled_file.txt") {
+		t.Errorf("expected polled_file.txt, got %v", downloadedFilename)
+	}
+
+	rawFile, err := os.ReadFile(downloadedFilename)
+	if err != nil {
+		t.Fatalf("ReadFile() error: %v", err)
+	}
+	if string(rawFile) != "polled content" {
+		t.Errorf("expected 'polled content', got %q", string(rawFile))
+	}
+}
+
+func TestChromeSession_DownloadFile_PollingSkipsCrdownload(t *testing.T) {
+	// Test that polling skips .crdownload partial download files
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "<html><body>No download here</body></html>")
+	}))
+	defer ts.Close()
+
+	dir, err := os.MkdirTemp(".", "chrome_crdownload_test*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	sessionName := "chrome_crdownload_test"
+	err = os.Mkdir(path.Join(dir, sessionName), 0744)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logger := BufferedLogger{}
+	session := NewSession(sessionName, &logger)
+	session.FilePrefix = dir + "/"
+
+	chromeSession, cancelFunc, err := session.NewChromeOpt(NewTestChromeOptionsWithTimeout(true, 30*time.Second))
+	defer cancelFunc()
+	if err != nil {
+		t.Fatalf("NewChromeOpt() error: %v", err)
+	}
+
+	go func() {
+		// First, create a .crdownload file (partial download)
+		time.Sleep(1 * time.Second)
+		_ = os.WriteFile(path.Join(chromeSession.DownloadPath, "data.csv.crdownload"), []byte("partial"), 0644)
+
+		// After another 2 seconds, create the complete file
+		time.Sleep(2 * time.Second)
+		_ = os.WriteFile(path.Join(chromeSession.DownloadPath, "data.csv"), []byte("complete data"), 0644)
+	}()
+
+	var downloadedFilename string
+	start := time.Now()
+	err = chromedp.Run(chromeSession.Ctx,
+		chromeSession.DownloadFile(&downloadedFilename, DownloadFileOptions{Timeout: 20 * time.Second},
+			chromedp.Navigate(ts.URL),
+		),
+	)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("DownloadFile() error: %v", err)
+	}
+
+	// Should detect data.csv (not .crdownload) - file appears at ~3s
+	if elapsed > 10*time.Second {
+		t.Errorf("DownloadFile() took %v, expected < 10s", elapsed)
+	}
+
+	if !strings.Contains(downloadedFilename, "data.csv") {
+		t.Errorf("expected data.csv, got %v", downloadedFilename)
+	}
+	if strings.Contains(downloadedFilename, ".crdownload") {
+		t.Errorf("should not match .crdownload file, got %v", downloadedFilename)
+	}
+
+	rawFile, err := os.ReadFile(downloadedFilename)
+	if err != nil {
+		t.Fatalf("ReadFile() error: %v", err)
+	}
+	if string(rawFile) != "complete data" {
+		t.Errorf("expected 'complete data', got %q", string(rawFile))
+	}
+}

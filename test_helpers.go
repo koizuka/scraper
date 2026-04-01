@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/chromedp/chromedp"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -72,28 +71,49 @@ func getCIMinTimeout(requested time.Duration) time.Duration {
 // NewTestChromeContext creates an isolated Chrome browser context for tests.
 // It uses t.TempDir() for the user data directory to avoid conflicts with other
 // Chrome instances, and applies CI-aware timeouts.
+// Retries up to 2 times on Chrome startup failure (flaky CI environments).
 // Cleanup is registered via t.Cleanup, so callers don't need to defer cancel.
 func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
 	t.Helper()
 
+	const maxRetries = 2
+
 	testOptions := NewTestChromeOptions(true)
-	allocOptions := []chromedp.ExecAllocatorOption{
-		chromedp.UserDataDir(t.TempDir()),
-	}
-	if testOptions.Headless {
-		allocOptions = append(allocOptions, chromedp.Headless, chromedp.DisableGPU)
-	}
-	allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocOptions...)
-
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
-
 	effectiveTimeout := getCIMinTimeout(timeout)
 	if effectiveTimeout == 0 {
 		effectiveTimeout = 30 * time.Second
 	}
-	ctx, timeoutCancel := context.WithTimeout(browserCtx, effectiveTimeout)
+
+	var ctx context.Context
+	var timeoutCancel, browserCancel, allocCancel context.CancelFunc
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		allocOptions := []chromedp.ExecAllocatorOption{
+			chromedp.UserDataDir(t.TempDir()),
+		}
+		if testOptions.Headless {
+			allocOptions = append(allocOptions, chromedp.Headless, chromedp.DisableGPU)
+		}
+		allocOptions = append(allocOptions, testOptions.ExtraAllocOptions...)
+
+		var allocCtx, browserCtx context.Context
+		allocCtx, allocCancel = chromedp.NewExecAllocator(context.Background(), allocOptions...)
+		browserCtx, browserCancel = chromedp.NewContext(allocCtx)
+		ctx, timeoutCancel = context.WithTimeout(browserCtx, effectiveTimeout)
+
+		// Try to start Chrome by running a no-op
+		if err := chromedp.Run(ctx); err != nil {
+			timeoutCancel()
+			browserCancel()
+			allocCancel()
+			if attempt < maxRetries {
+				time.Sleep(time.Duration(attempt+1) * time.Second)
+				continue
+			}
+			t.Fatalf("Chrome failed to start after %d retries: %v", maxRetries+1, err)
+		}
+		break
+	}
 
 	t.Cleanup(func() {
 		timeoutCancel()
@@ -106,6 +126,7 @@ func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
 
 // NewChromeWithRetry creates a new Chrome session with retry logic for startup failures.
 // This helper is specifically designed to handle flaky Chrome startup issues in CI environments.
+// It retries on any Chrome startup failure (crashes, sandbox issues, websocket timeouts, etc.).
 func NewChromeWithRetry(session *Session, options NewChromeOptions, maxRetries int) (*ChromeSession, func(), error) {
 	var chromeSession *ChromeSession
 	var cancelFunc func()
@@ -117,24 +138,15 @@ func NewChromeWithRetry(session *Session, options NewChromeOptions, maxRetries i
 			return chromeSession, cancelFunc, nil
 		}
 
-		// Check if it's a websocket timeout error that we should retry
-		if strings.Contains(err.Error(), "websocket url timeout reached") {
-			if cancelFunc != nil {
-				cancelFunc()
-			}
-			if attempt < maxRetries {
-				// Wait a bit before retrying
-				time.Sleep(time.Duration(attempt+1) * time.Second)
-				continue
-			}
-		}
-
-		// For other errors or if we've exhausted retries, return the error
 		if cancelFunc != nil {
 			cancelFunc()
 		}
-		return nil, func() {}, err
+		if attempt < maxRetries {
+			// Wait a bit before retrying
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		}
 	}
 
-	return chromeSession, cancelFunc, err
+	return nil, func() {}, err
 }

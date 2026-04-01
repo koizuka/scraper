@@ -1,4 +1,5 @@
 /.idea/
+.claude/settings.local.json
 chromeUserData
 chrome_test/chrome/example.txt
 

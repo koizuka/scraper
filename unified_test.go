@@ -89,10 +89,10 @@ func TestUnifiedInterface(t *testing.T) {
 				scraper: func(t *testing.T) UnifiedScraper {
 					var logger ConsoleLogger
 					session := NewSession("test-chrome", logger)
-					chromeSession, cancel, err := session.NewChromeOpt(NewChromeOptions{
+					chromeSession, cancel, err := NewChromeWithRetry(session, NewChromeOptions{
 						Headless: true,
 						Timeout:  30 * time.Second,
-					})
+					}, 2)
 					if err != nil {
 						t.Skipf("Chrome not available: %v", err)
 					}

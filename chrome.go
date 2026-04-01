@@ -440,7 +440,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 			for {
 				select {
 				case <-downloadCtx.Done():
-					// タイムアウト: ディレクトリにファイルがあればそれを返す
+					// Timeout: return file from directory if available
 					if found, matchErr := checkDownloadDir(); found != "" {
 						*filename = found
 						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
@@ -451,7 +451,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					return downloadCtx.Err()
 
 				case <-ticker.C:
-					// ポーリング: ダウンロード完了ファイルがあれば即座に返す
+					// Polling: return immediately if completed file found
 					if found, _ := checkDownloadDir(); found != "" {
 						*filename = found
 						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)

@@ -1,6 +1,6 @@
 module github.com/koizuka/scraper
 
-go 1.21
+go 1.25
 
 require (
 	github.com/PuerkitoBio/goquery v1.9.2

@@ -3,7 +3,6 @@ package scraper
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/google/go-cmp/cmp"
 	"math"
 	"net/url"
@@ -71,7 +70,7 @@ func TestUnmarshall(t *testing.T) {
 	}
 	value := testData
 	if value != shouldBe {
-		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, value, shouldBe))
+		t.Errorf("%v: %#v != %#v", name, value, shouldBe)
 	}
 }
 
@@ -92,7 +91,7 @@ func TestUnmarshallInt(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 
@@ -105,7 +104,7 @@ func TestUnmarshallInt(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 
@@ -118,7 +117,7 @@ func TestUnmarshallInt(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 }
@@ -140,7 +139,7 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 
@@ -153,7 +152,7 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 
@@ -162,11 +161,11 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 		shouldBe := `expected integer: "US"`
 		err = Unmarshal(&value, page.Selection, UnmarshalOption{Re: `(US)`})
 		if err == nil {
-			t.Error(fmt.Errorf("must be an error"))
+			t.Error("must be an error")
 		} else {
 			errorString := err.Error()
 			if errorString != shouldBe {
-				t.Errorf(fmt.Sprintf("%#v != %#v", errorString, shouldBe))
+				t.Errorf("%#v != %#v", errorString, shouldBe)
 			}
 		}
 	}
@@ -180,7 +179,7 @@ func TestUnmarshallIntRegEx(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 }
@@ -202,7 +201,7 @@ func TestUnmarshallFloat(t *testing.T) {
 		}
 
 		if math.Abs(value-shouldBe) > 0.00001 {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 
@@ -212,11 +211,11 @@ func TestUnmarshallFloat(t *testing.T) {
 		shouldBe := `strconv.ParseFloat: parsing "test": invalid syntax`
 		err = Unmarshal(&value, page.Selection.Find("span"), UnmarshalOption{})
 		if err == nil {
-			t.Error(fmt.Errorf("should be an error"))
+			t.Error("should be an error")
 		} else {
 			errorString := err.Error()
 			if errorString != shouldBe {
-				t.Errorf(fmt.Sprintf("%#v != %#v", errorString, shouldBe))
+				t.Errorf("%#v != %#v", errorString, shouldBe)
 			}
 		}
 	}
@@ -233,7 +232,7 @@ func TestUnmarshallFloat(t *testing.T) {
 			t.Error("value is nil")
 		}
 		if math.Abs(*value-shouldBe) > 0.00001 {
-			t.Errorf(fmt.Sprintf("%#v != %#v", *value, shouldBe))
+			t.Errorf("%#v != %#v", *value, shouldBe)
 		}
 	}
 }
@@ -275,7 +274,7 @@ func TestUnmarshallTime(t *testing.T) {
 
 		page, err := createMashallerTestPage(html)
 		if err != nil {
-			t.Error(fmt.Sprintf("%v: prepare html(%#v): %v", i, html, err))
+			t.Errorf("%v: prepare html(%#v): %v", i, html, err)
 			continue
 		}
 
@@ -283,22 +282,22 @@ func TestUnmarshallTime(t *testing.T) {
 		err = Unmarshal(&value, page.Selection, UnmarshalOption{Time: format, Loc: location})
 		if item.ExpectErr == "" {
 			if err != nil {
-				t.Error(fmt.Sprintf("%v: Unmarshal(%#v, %#v): %v", i, html, format, err))
+				t.Errorf("%v: Unmarshal(%#v, %#v): %v", i, html, format, err)
 				continue
 			}
 
 			if value == nil {
-				t.Errorf(fmt.Sprintf("%v: Unmarshal(%#v, %#v): value is nil", i, html, format))
+				t.Errorf("%v: Unmarshal(%#v, %#v): value is nil", i, html, format)
 				continue
 			}
 
 			if !shouldBe.Equal(*value) {
-				t.Errorf(fmt.Sprintf("%v: Unmarshal(%#v, %#v): %#v != %#v", i, html, format, value, shouldBe))
+				t.Errorf("%v: Unmarshal(%#v, %#v): %#v != %#v", i, html, format, value, shouldBe)
 			}
 		} else {
 			s := err.Error()
 			if item.ExpectErr != s {
-				t.Errorf(fmt.Sprintf("%v: Unmarshal(%#v, %#v): error %#v != %#v", i, html, format, s, item.ExpectErr))
+				t.Errorf("%v: Unmarshal(%#v, %#v): error %#v != %#v", i, html, format, s, item.ExpectErr)
 			}
 		}
 	}
@@ -320,7 +319,7 @@ func TestUnmarshallArray(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(value, shouldBe) {
-		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		t.Errorf("%#v != %#v", value, shouldBe)
 	}
 }
 
@@ -342,10 +341,10 @@ func TestUnmarshallOptional(t *testing.T) {
 		t.Error(err)
 	}
 	if value == nil {
-		t.Errorf(fmt.Sprintf("%v != %v", value, *shouldBe))
+		t.Errorf("%v != %v", value, *shouldBe)
 	}
 	if *value != *shouldBe {
-		t.Errorf(fmt.Sprintf("%v != %v", *value, *shouldBe))
+		t.Errorf("%v != %v", *value, *shouldBe)
 	}
 
 	err = Unmarshal(&value, page.Find("a"), UnmarshalOption{})
@@ -355,7 +354,7 @@ func TestUnmarshallOptional(t *testing.T) {
 
 	shouldBe = nil
 	if value != shouldBe {
-		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		t.Errorf("%#v != %#v", value, shouldBe)
 	}
 }
 
@@ -382,7 +381,7 @@ func TestUnmarshallEmptyFind(t *testing.T) {
 		}
 		shouldBe := "URL"
 		if value != shouldBe {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 
@@ -398,7 +397,7 @@ func TestUnmarshallEmptyFind(t *testing.T) {
 			Text: "text",
 		}
 		if value != shouldBe {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 }
@@ -415,7 +414,7 @@ func TestUnmarshalFieldError_Error(t *testing.T) {
 	shouldBe := "a.b: test"
 	value := target.Error()
 	if value != shouldBe {
-		t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+		t.Errorf("%#v != %#v", value, shouldBe)
 	}
 }
 
@@ -443,7 +442,7 @@ func TestUnmarshallStructArrayInStruct(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(value.P, shouldBe) {
-			t.Errorf(fmt.Sprintf("%#v != %#v", value, shouldBe))
+			t.Errorf("%#v != %#v", value, shouldBe)
 		}
 	}
 }
@@ -466,7 +465,7 @@ func TestUnmarshallUnexportedField(t *testing.T) {
 		shouldBe := UnmarshalFieldError{"test", UnmarshalUnexportedFieldError{}}
 		err = Unmarshal(&value, page.Find("div"), UnmarshalOption{})
 		if !errors.Is(shouldBe, err) {
-			t.Errorf(fmt.Sprintf("'%v' != '%v'", err, shouldBe))
+			t.Errorf("'%v' != '%v'", err, shouldBe)
 		}
 	}
 }
@@ -487,7 +486,7 @@ func TestUnmarshallHtml(t *testing.T) {
 		t.Error(err)
 	}
 	if value != shouldBe {
-		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, value, shouldBe))
+		t.Errorf("%v: %#v != %#v", name, value, shouldBe)
 	}
 
 	name = "UnmarshalHtml tagValue"
@@ -500,7 +499,7 @@ func TestUnmarshallHtml(t *testing.T) {
 		t.Error(err)
 	}
 	if tagValue.Html != shouldBe {
-		t.Errorf(fmt.Sprintf("%v: %#v != %#v", name, tagValue.Html, shouldBe))
+		t.Errorf("%v: %#v != %#v", name, tagValue.Html, shouldBe)
 	}
 }
 
@@ -544,7 +543,7 @@ func TestUnmarshalStringIgnore(t *testing.T) {
 
 			if value != tt.want {
 				diff := cmp.Diff(value, tt.want)
-				t.Errorf(fmt.Sprintf("%#v", diff))
+				t.Errorf("%#v", diff)
 			}
 		})
 	}

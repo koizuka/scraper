@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -385,17 +386,28 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 			// This captures the page state before clicking download button
 			session.captureCurrentHtml(ctxt)
 
+			// downloadMu guards suggestedFilename/downloadBegan: they are written
+			// from the ListenBrowser event goroutine and read from the timeout
+			// branch of the select loop below.
+			var downloadMu sync.Mutex
 			suggestedFilename := ""
+			downloadBegan := false
 			// Use ListenBrowser instead of ListenTarget to capture download events
 			// from popup windows opened via window.open()
 			chromedp.ListenBrowser(downloadCtx, func(ev interface{}) {
 				switch ev := ev.(type) {
 				case *browser.EventDownloadWillBegin:
+					downloadMu.Lock()
 					suggestedFilename = path.Join(session.DownloadPath, ev.SuggestedFilename)
+					downloadBegan = true
+					downloadMu.Unlock()
 				case *browser.EventDownloadProgress:
 					switch ev.State {
 					case browser.DownloadProgressStateCompleted:
-						download <- suggestedFilename
+						downloadMu.Lock()
+						name := suggestedFilename
+						downloadMu.Unlock()
+						download <- name
 					case browser.DownloadProgressStateCanceled:
 						download <- ""
 					}
@@ -448,6 +460,15 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					} else if matchErr != nil {
 						return matchErr
 					}
+					// Diagnostic: a bare DeadlineExceeded leaves a post-mortem unable
+					// to distinguish "click never triggered a download" from "download
+					// began but ran past the timeout". Record what was observed.
+					downloadMu.Lock()
+					began, suggested := downloadBegan, suggestedFilename
+					downloadMu.Unlock()
+					session.Printf("%s DOWNLOAD TIMEOUT after %v: downloadBegan=%v, suggestedFilename=%q, glob=%q",
+						session.getDebugPrefix(), time.Since(startTime).Round(time.Millisecond), began, suggested, options.Glob)
+					session.Printf("%s DOWNLOAD TIMEOUT: %s", session.getDebugPrefix(), describeDownloadDir(session.DownloadPath, startTime))
 					return downloadCtx.Err()
 
 				case <-ticker.C:
@@ -474,6 +495,36 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 			}
 		}
 	}
+}
+
+// describeDownloadDir summarizes the download directory for timeout diagnostics.
+// It lists every entry, flagging ones modified at/after startTime ("new") and any
+// Chrome partial-download files ("partial"), so a post-mortem can tell whether a
+// download started at all.
+func describeDownloadDir(dir string, startTime time.Time) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Sprintf("download dir %v unreadable: %v", dir, err)
+	}
+	if len(entries) == 0 {
+		return fmt.Sprintf("download dir %v is empty (no file produced)", dir)
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		desc := e.Name()
+		if info, ierr := e.Info(); ierr == nil {
+			tags := fmt.Sprintf("%dB", info.Size())
+			if !info.ModTime().Before(startTime) {
+				tags += ",new"
+			}
+			if strings.HasSuffix(e.Name(), ".crdownload") {
+				tags += ",partial"
+			}
+			desc += "(" + tags + ")"
+		}
+		parts = append(parts, desc)
+	}
+	return fmt.Sprintf("download dir %v contents: %s", dir, strings.Join(parts, ", "))
 }
 
 /**

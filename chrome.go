@@ -115,10 +115,15 @@ type NewChromeOptions struct {
 	Timeout           time.Duration
 	ActionTimeout     time.Duration // Timeout for individual actions (0 = no timeout)
 	ExtraAllocOptions []chromedp.ExecAllocatorOption
+	UserDataDir       string // Chrome user data directory ("" = ./chromeUserData)
 }
 
 func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *ChromeSession, cancelFunc context.CancelFunc, err error) {
-	chromeUserDataDir, err := filepath.Abs("./chromeUserData")
+	userDataDir := options.UserDataDir
+	if userDataDir == "" {
+		userDataDir = "./chromeUserData"
+	}
+	chromeUserDataDir, err := filepath.Abs(userDataDir)
 	if err != nil {
 		return nil, func() {}, err
 	}

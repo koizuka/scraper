@@ -40,7 +40,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Errorf("NewChromeOpt() error: %v", err)
@@ -89,7 +89,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Errorf("NewChromeOpt() error: %v", err)
@@ -169,7 +169,7 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+			chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 			defer cancelFunc()
 			if err != nil {
 				t.Errorf("NewChromeOpt() error: %v", err)
@@ -231,7 +231,7 @@ func TestChromeSession_DebugStep(t *testing.T) {
 		session := NewSession(sessionName, logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -275,7 +275,7 @@ func TestChromeSession_DebugStep(t *testing.T) {
 		debugStep := "継承テスト"
 		session.SetDebugStep(debugStep)
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -331,7 +331,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 
 	t.Run("record mode", func(t *testing.T) {
 		// First, record the session
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -381,7 +381,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		// Enable replay mode
 		session.NotUseNetwork = true
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -437,7 +437,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		session.invokeCount = 0
 		session.NotUseNetwork = true
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -482,7 +482,7 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -583,7 +583,7 @@ func runPollingDownloadTest(t *testing.T, url string, sessionName string, placeF
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		if err != nil {
 			cancelFunc()
 			t.Fatalf("NewChromeOpt() error: %v", err)

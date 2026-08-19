@@ -64,10 +64,7 @@ func TestChromeSession_GetCurrentURL(t *testing.T) {
 
 		// Create session and Chrome session
 		session := NewSession("test", ConsoleLogger{})
-		chromeSession, cancel, err := NewChromeWithRetry(session, NewChromeOptions{
-			Headless: true,
-			Timeout:  10 * time.Second,
-		}, 2)
+		chromeSession, cancel, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
 		if err != nil {
 			t.Skipf("Chrome not available for testing: %v", err)
 		}
@@ -95,10 +92,7 @@ func TestChromeSession_GetCurrentURL(t *testing.T) {
 	t.Run("GetCurrentURL without navigation", func(t *testing.T) {
 		// Create session and Chrome session
 		session := NewSession("test", ConsoleLogger{})
-		chromeSession, cancel, err := NewChromeWithRetry(session, NewChromeOptions{
-			Headless: true,
-			Timeout:  10 * time.Second,
-		}, 2)
+		chromeSession, cancel, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
 		if err != nil {
 			t.Skipf("Chrome not available for testing: %v", err)
 		}
@@ -175,10 +169,7 @@ func TestChromeSession_GetCurrentURL_Replay(t *testing.T) {
 
 		// First, record mode
 		session := NewSession("test_chrome_replay", ConsoleLogger{})
-		chromeSession, cancel, err := NewChromeWithRetry(session, NewChromeOptions{
-			Headless: true,
-			Timeout:  10 * time.Second,
-		}, 2)
+		chromeSession, cancel, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
 		if err != nil {
 			t.Skipf("Chrome not available for testing: %v", err)
 		}

@@ -63,7 +63,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		session := NewSession("test", &logger)
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -117,7 +117,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)

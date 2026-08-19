@@ -1,6 +1,8 @@
 package scraper
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/chromedp/chromedp"
 	"github.com/google/go-cmp/cmp"
@@ -38,7 +40,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Errorf("NewChromeOpt() error: %v", err)
@@ -87,7 +89,7 @@ func TestSession_RunNavigate(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 10*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Errorf("NewChromeOpt() error: %v", err)
@@ -167,7 +169,7 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+			chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 			defer cancelFunc()
 			if err != nil {
 				t.Errorf("NewChromeOpt() error: %v", err)
@@ -229,7 +231,7 @@ func TestChromeSession_DebugStep(t *testing.T) {
 		session := NewSession(sessionName, logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -273,7 +275,7 @@ func TestChromeSession_DebugStep(t *testing.T) {
 		debugStep := "継承テスト"
 		session.SetDebugStep(debugStep)
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -329,7 +331,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 
 	t.Run("record mode", func(t *testing.T) {
 		// First, record the session
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -379,7 +381,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		// Enable replay mode
 		session.NotUseNetwork = true
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -435,7 +437,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		session.invokeCount = 0
 		session.NotUseNetwork = true
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -480,7 +482,7 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 		session := NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
 			t.Fatalf("NewChromeOpt() error: %v", err)
@@ -554,6 +556,62 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 	})
 }
 
+// runPollingDownloadTest starts a Chrome session, runs placeFiles in a goroutine
+// against the session's download directory, and executes DownloadFile while
+// navigating to url. It returns the detected filename and the elapsed time.
+// If the browser dies mid-test (chromedp surfaces this as context.Canceled — an
+// infra failure unrelated to the polling logic under test, which fails as
+// DeadlineExceeded or a glob mismatch instead), it relaunches Chrome and
+// retries once. The buffered session log is included in failure output.
+func runPollingDownloadTest(t *testing.T, url string, sessionName string, placeFiles func(downloadPath string)) (string, time.Duration) {
+	t.Helper()
+
+	const maxAttempts = 2
+	for attempt := 1; ; attempt++ {
+		dir, err := os.MkdirTemp(".", sessionName+"*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+		err = os.Mkdir(path.Join(dir, sessionName), 0744)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		logger := BufferedLogger{}
+		session := NewSession(sessionName, &logger)
+		session.FilePrefix = dir + "/"
+
+		chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		if err != nil {
+			cancelFunc()
+			t.Fatalf("NewChromeOpt() error: %v", err)
+		}
+
+		go placeFiles(chromeSession.DownloadPath)
+
+		var downloadedFilename string
+		start := time.Now()
+		err = chromedp.Run(chromeSession.Ctx,
+			chromeSession.DownloadFile(&downloadedFilename, DownloadFileOptions{Timeout: 20 * time.Second},
+				chromedp.Navigate(url), // Navigate to normal page (no download triggered)
+			),
+		)
+		elapsed := time.Since(start)
+		cancelFunc()
+
+		if err != nil {
+			if errors.Is(err, context.Canceled) && attempt < maxAttempts {
+				t.Logf("attempt %d: browser died mid-test, retrying: %v\nsession log:\n%s", attempt, err, logger.String())
+				continue
+			}
+			t.Fatalf("DownloadFile() error: %v\nsession log:\n%s", err, logger.String())
+		}
+		return downloadedFilename, elapsed
+	}
+}
+
 func TestChromeSession_DownloadFile_Polling(t *testing.T) {
 	// Test that DownloadFile detects files via polling when browser events don't fire.
 	// A normal HTML page (no download) is served, and a file is placed in the download
@@ -566,46 +624,11 @@ func TestChromeSession_DownloadFile_Polling(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	dir, err := os.MkdirTemp(".", "chrome_poll_test*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-
-	sessionName := "chrome_poll_test"
-	err = os.Mkdir(path.Join(dir, sessionName), 0744)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	logger := BufferedLogger{}
-	session := NewSession(sessionName, &logger)
-	session.FilePrefix = dir + "/"
-
-	chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
-	defer cancelFunc()
-	if err != nil {
-		t.Fatalf("NewChromeOpt() error: %v", err)
-	}
-
 	// Place a file in the download directory after 2 seconds (simulating download without events)
-	go func() {
+	downloadedFilename, elapsed := runPollingDownloadTest(t, ts.URL, "chrome_poll_test", func(downloadPath string) {
 		time.Sleep(2 * time.Second)
-		_ = os.WriteFile(path.Join(chromeSession.DownloadPath, "polled_file.txt"), []byte("polled content"), 0644)
-	}()
-
-	var downloadedFilename string
-	start := time.Now()
-	err = chromedp.Run(chromeSession.Ctx,
-		chromeSession.DownloadFile(&downloadedFilename, DownloadFileOptions{Timeout: 20 * time.Second},
-			chromedp.Navigate(ts.URL), // Navigate to normal page (no download triggered)
-		),
-	)
-	elapsed := time.Since(start)
-
-	if err != nil {
-		t.Fatalf("DownloadFile() error: %v", err)
-	}
+		_ = os.WriteFile(path.Join(downloadPath, "polled_file.txt"), []byte("polled content"), 0644)
+	})
 
 	// Should complete well before the 20s timeout (file appears at ~2s, polling checks every 1s)
 	if elapsed > 10*time.Second {
@@ -634,50 +657,15 @@ func TestChromeSession_DownloadFile_PollingSkipsCrdownload(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	dir, err := os.MkdirTemp(".", "chrome_crdownload_test*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-
-	sessionName := "chrome_crdownload_test"
-	err = os.Mkdir(path.Join(dir, sessionName), 0744)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	logger := BufferedLogger{}
-	session := NewSession(sessionName, &logger)
-	session.FilePrefix = dir + "/"
-
-	chromeSession, cancelFunc, err := NewChromeWithRetry(session, NewTestChromeOptionsWithTimeout(true, 30*time.Second), 2)
-	defer cancelFunc()
-	if err != nil {
-		t.Fatalf("NewChromeOpt() error: %v", err)
-	}
-
-	go func() {
+	downloadedFilename, elapsed := runPollingDownloadTest(t, ts.URL, "chrome_crdownload_test", func(downloadPath string) {
 		// First, create a .crdownload file (partial download)
 		time.Sleep(1 * time.Second)
-		_ = os.WriteFile(path.Join(chromeSession.DownloadPath, "data.csv.crdownload"), []byte("partial"), 0644)
+		_ = os.WriteFile(path.Join(downloadPath, "data.csv.crdownload"), []byte("partial"), 0644)
 
 		// After another 2 seconds, create the complete file
 		time.Sleep(2 * time.Second)
-		_ = os.WriteFile(path.Join(chromeSession.DownloadPath, "data.csv"), []byte("complete data"), 0644)
-	}()
-
-	var downloadedFilename string
-	start := time.Now()
-	err = chromedp.Run(chromeSession.Ctx,
-		chromeSession.DownloadFile(&downloadedFilename, DownloadFileOptions{Timeout: 20 * time.Second},
-			chromedp.Navigate(ts.URL),
-		),
-	)
-	elapsed := time.Since(start)
-
-	if err != nil {
-		t.Fatalf("DownloadFile() error: %v", err)
-	}
+		_ = os.WriteFile(path.Join(downloadPath, "data.csv"), []byte("complete data"), 0644)
+	})
 
 	// Should detect data.csv (not .crdownload) - file appears at ~3s
 	if elapsed > 10*time.Second {

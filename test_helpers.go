@@ -53,6 +53,18 @@ func NewTestChromeOptionsWithTimeout(headless bool, timeout time.Duration) NewCh
 	}
 }
 
+// NewIsolatedTestChromeOptions creates CI-compatible Chrome options that use a
+// per-test user data directory (t.TempDir()) instead of the shared
+// ./chromeUserData. Consecutive tests sharing one profile directory can make
+// Chrome instances interfere with each other (profile SingletonLock contention,
+// leftover state), which shows up as flaky "context canceled" failures in CI.
+func NewIsolatedTestChromeOptions(t *testing.T, headless bool, timeout time.Duration) NewChromeOptions {
+	t.Helper()
+	options := NewTestChromeOptionsWithTimeout(headless, timeout)
+	options.UserDataDir = t.TempDir()
+	return options
+}
+
 // getCIMinTimeout ensures that CI environments have ample time to launch Chrome,
 // which is slower on shared runners. Local runs retain their requested timeout.
 // A zero duration still means “no timeout” even in CI, so we skip adjustments.

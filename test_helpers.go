@@ -23,7 +23,11 @@ func getCICompatibleChromeOptions() []chromedp.ExecAllocatorOption {
 			chromedp.Flag("disable-default-apps", true),
 			chromedp.Flag("disable-web-security", true),
 			chromedp.Flag("disable-blink-features", "AutomationControlled"),
-			chromedp.Flag("single-process", true),
+			// NOTE: --single-process was used here until it turned out to make
+			// Chrome die mid-test ("context canceled") when downloading with a
+			// cold profile. It is explicitly unsupported by Chromium and
+			// crash-prone; startup reliability is covered by WSURLReadTimeout
+			// and NewChromeWithRetry instead.
 			// Increase WebSocket URL read timeout for Chrome startup in CI
 			chromedp.WSURLReadTimeout(60*time.Second),
 		)
@@ -69,10 +73,15 @@ func getCIMinTimeout(requested time.Duration) time.Duration {
 }
 
 // NewTestChromeContext creates an isolated Chrome browser context for tests.
-// It uses t.TempDir() for the user data directory to avoid conflicts with other
-// Chrome instances, and applies CI-aware timeouts.
+// It uses a per-test temporary user data directory to avoid conflicts with
+// other Chrome instances, and applies CI-aware timeouts.
 // Retries up to 2 times on Chrome startup failure (flaky CI environments).
 // Cleanup is registered via t.Cleanup, so callers don't need to defer cancel.
+//
+// The user data directory is deliberately NOT t.TempDir(): its cleanup fails
+// the test when files are still locked, and on Windows Chrome's crashpad
+// handler (a separate process the allocator does not wait for) can briefly
+// keep files open after the browser exits. Cleanup is best-effort instead.
 func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
 	t.Helper()
 
@@ -88,8 +97,14 @@ func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
 	var timeoutCancel, browserCancel, allocCancel context.CancelFunc
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		userDataDir, err := os.MkdirTemp("", "chromeUserData-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(userDataDir) })
+
 		allocOptions := []chromedp.ExecAllocatorOption{
-			chromedp.UserDataDir(t.TempDir()),
+			chromedp.UserDataDir(userDataDir),
 		}
 		if testOptions.Headless {
 			allocOptions = append(allocOptions, chromedp.Headless, chromedp.DisableGPU)

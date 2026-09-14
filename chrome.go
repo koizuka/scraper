@@ -179,7 +179,18 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 	}
 
 	// configure to download behavior
-	err = chromedp.Run(ctxt,
+	//
+	// NOTE: this bootstrap Run must use browserCtx, NOT ctxt (the timeout
+	// context). chromedp binds both the Chrome process (via
+	// exec.CommandContext) and the target's event loop to the context of the
+	// *first* Run on a context -- see the warning on chromedp.Run: "it's
+	// generally a bad idea to use a context timeout on the first Run call, as
+	// it will stop the entire browser". Bootstrapping on ctxt would kill the
+	// whole browser the moment the session deadline fires, so BrowserCtx (whose
+	// documented purpose is post-timeout work such as graceful shutdown and
+	// failure-state capture) would only ever yield "context canceled".
+	// Per-operation deadlines are unaffected: callers still run against Ctx.
+	err = chromedp.Run(browserCtx,
 		browser.SetDownloadBehavior("allow").
 			WithDownloadPath(downloadPath).
 			WithEventsEnabled(true),

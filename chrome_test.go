@@ -687,3 +687,58 @@ func TestChromeSession_DownloadFile_PollingSkipsCrdownload(t *testing.T) {
 		t.Errorf("expected 'complete data', got %q", string(rawFile))
 	}
 }
+
+// TestChromeSession_BrowserCtxSurvivesTimeout guards the contract that
+// BrowserCtx stays usable after the session timeout on Ctx has fired.
+// chromedp binds the Chrome process and the target event loop to the context of
+// the first Run, so bootstrapping on the timeout context used to kill the whole
+// browser at the deadline -- making post-mortem capture (HTML/screenshot of the
+// failing page) impossible, which is the one moment it is needed.
+func TestChromeSession_BrowserCtxSurvivesTimeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "<html><head><title>still alive</title></head><body>Hello.</body></html>")
+	}))
+	defer ts.Close()
+
+	dir, err := os.MkdirTemp(".", "chrome_test*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	sessionName := "chrome_test"
+	if err := os.Mkdir(path.Join(dir, sessionName), 0744); err != nil {
+		t.Fatal(err)
+	}
+
+	logger := BufferedLogger{}
+	session := NewSession(sessionName, &logger)
+	session.FilePrefix = dir + "/"
+
+	chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 3*time.Second), 2)
+	defer cancelFunc()
+	if err != nil {
+		t.Fatalf("NewChromeOpt() error: %v", err)
+	}
+
+	if err := chromedp.Run(chromeSession.Ctx, chromedp.Navigate(ts.URL)); err != nil {
+		t.Fatalf("Navigate() error: %v", err)
+	}
+
+	// Let the session timeout fire, as it would on a stuck scraper.
+	<-chromeSession.Ctx.Done()
+	if !errors.Is(chromeSession.Ctx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("Ctx should be deadline-exceeded, got %v", chromeSession.Ctx.Err())
+	}
+
+	// The browser must still answer on BrowserCtx so the failing page can be captured.
+	captureCtx, cancel := context.WithTimeout(chromeSession.BrowserCtx, 10*time.Second)
+	defer cancel()
+	var title string
+	if err := chromedp.Run(captureCtx, chromedp.Title(&title)); err != nil {
+		t.Fatalf("BrowserCtx unusable after Ctx timeout: %v", err)
+	}
+	if title != "still alive" {
+		t.Errorf("title = %q, want %q", title, "still alive")
+	}
+}

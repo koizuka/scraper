@@ -178,7 +178,7 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 
 			// download file
 			var downloadedFilename string
-			err = chromedp.Run(chromeSession.Ctx,
+			err = chromedp.Do(chromeSession.Ctx,
 				chromeSession.DownloadFile(&downloadedFilename, tt.opt,
 					chromedp.Navigate(ts.URL),
 				),
@@ -495,8 +495,7 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 		}
 
 		// Manually capture HTML (simulating what happens before operations)
-		var html string
-		err = chromedp.Run(chromeSession.Ctx, chromedp.OuterHTML("html", &html, chromedp.ByQuery))
+		html, err := chromedp.Run(chromeSession.Ctx, chromedp.OuterHTML(chromedp.CSS("html")))
 		if err != nil {
 			t.Fatalf("OuterHTML() error: %v", err)
 		}
@@ -593,7 +592,7 @@ func runPollingDownloadTest(t *testing.T, url string, sessionName string, placeF
 
 		var downloadedFilename string
 		start := time.Now()
-		err = chromedp.Run(chromeSession.Ctx,
+		err = chromedp.Do(chromeSession.Ctx,
 			chromeSession.DownloadFile(&downloadedFilename, DownloadFileOptions{Timeout: 20 * time.Second},
 				chromedp.Navigate(url), // Navigate to normal page (no download triggered)
 			),
@@ -721,7 +720,7 @@ func TestChromeSession_BrowserCtxSurvivesTimeout(t *testing.T) {
 		t.Fatalf("NewChromeOpt() error: %v", err)
 	}
 
-	if err := chromedp.Run(chromeSession.Ctx, chromedp.Navigate(ts.URL)); err != nil {
+	if err := chromedp.Do(chromeSession.Ctx, chromedp.Navigate(ts.URL)); err != nil {
 		t.Fatalf("Navigate() error: %v", err)
 	}
 
@@ -734,8 +733,8 @@ func TestChromeSession_BrowserCtxSurvivesTimeout(t *testing.T) {
 	// The browser must still answer on BrowserCtx so the failing page can be captured.
 	captureCtx, cancel := context.WithTimeout(chromeSession.BrowserCtx, 10*time.Second)
 	defer cancel()
-	var title string
-	if err := chromedp.Run(captureCtx, chromedp.Title(&title)); err != nil {
+	title, err := chromedp.Run(captureCtx, chromedp.Title())
+	if err != nil {
 		t.Fatalf("BrowserCtx unusable after Ctx timeout: %v", err)
 	}
 	if title != "still alive" {

@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"github.com/chromedp/chromedp"
 	"os"
 	"path"
 	"strings"
@@ -41,7 +42,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		session.NotUseNetwork = true
 		session.invokeCount = 0 // Reset counter
 
-		// Since we're not running actual Chrome, we can't call action.Do()
+		// Since we're not running actual Chrome, we can't call chromedp.Do
 		// Instead, test the logic directly
 		if session.NotUseNetwork {
 			// This should try to read from the file we created
@@ -127,7 +128,7 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 		action := chromeSession.DownloadFile(&filename, DownloadFileOptions{})
 
 		// Test replay logic
-		err = action(chromeSession.Ctx)
+		err = chromedp.Do(chromeSession.Ctx, action)
 		if err != nil {
 			t.Errorf("DownloadFile() in replay mode error: %v", err)
 			return

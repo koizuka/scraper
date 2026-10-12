@@ -26,10 +26,8 @@ func getCICompatibleChromeOptions() []chromedp.ExecAllocatorOption {
 			// NOTE: --single-process was used here until it turned out to make
 			// Chrome die mid-test ("context canceled") when downloading with a
 			// cold profile. It is explicitly unsupported by Chromium and
-			// crash-prone; startup reliability is covered by WSURLReadTimeout
-			// and NewChromeWithRetry instead.
-			// Increase WebSocket URL read timeout for Chrome startup in CI
-			chromedp.WSURLReadTimeout(60*time.Second),
+			// crash-prone. chromedp now uses the pipe transport, so the
+			// context deadline bounds startup instead of WSURLReadTimeout.
 		)
 	}
 
@@ -117,7 +115,7 @@ func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
 		ctx, timeoutCancel = context.WithTimeout(browserCtx, effectiveTimeout)
 
 		// Try to start Chrome by running a no-op
-		if err := chromedp.Run(ctx); err != nil {
+		if err := chromedp.Do(ctx); err != nil {
 			timeoutCancel()
 			browserCancel()
 			allocCancel()

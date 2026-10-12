@@ -1,5 +1,7 @@
 # scraper
 
+Go 1.27 以上が必要です。Chrome API の更新については [移行ガイド](UNIFIED_API_MIGRATION_GUIDE.md#chromedp-v019-への移行破壊的変更) を参照してください。
+
 ## 基本的な使い方
 
 ```go

@@ -38,9 +38,9 @@ func scrapeWithChrome(session *scraper.Session) error {
     }
     defer cancel()
     
-    err = chromedp.Run(chromeSession.Ctx,
+    err = chromedp.Do(chromeSession.Ctx,
         chromedp.Navigate("https://example.com"),
-        chromedp.WaitVisible("h1", chromedp.ByQuery),
+        chromedp.WaitVisible(chromedp.CSS("h1")),
         chromeSession.SaveHtml(nil),
     )
     if err != nil {
@@ -166,12 +166,12 @@ func getSbiSecurityChrome(param ParamRegistry, service StatementReceiver, sessio
     }
     defer cancel()
     
-    err = chromedp.Run(chromeSession.Ctx,
+    err = chromedp.Do(chromeSession.Ctx,
         chromedp.Navigate(`https://www.sbisec.co.jp/`),
-        chromedp.WaitVisible(`form[name=form_login]`, chromedp.ByQuery),
-        chromedp.SendKeys(`input[name=user_id]`, param.Param(ParamUser), chromedp.ByQuery),
-        chromedp.SendKeys(`input[name=user_password]`, param.Param(ParamPassword), chromedp.ByQuery),
-        chromedp.Click(`[name=ACT_login]`, chromedp.ByQuery),
+        chromedp.WaitVisible(chromedp.CSS(`form[name=form_login]`)),
+        chromedp.SendKeys(chromedp.CSS(`input[name=user_id]`), param.Param(ParamUser)),
+        chromedp.SendKeys(chromedp.CSS(`input[name=user_password]`), param.Param(ParamPassword)),
+        chromedp.Click(chromedp.CSS(`[name=ACT_login]`)),
     )
     if err != nil {
         return err
@@ -407,8 +407,10 @@ func advancedDownload(scraperInstance scraper.UnifiedScraper) error {
     if err != nil {
         // 失敗した場合は型固有の機能を使用
         if chromeSession, ok := scraperInstance.(*scraper.ChromeSession); ok {
-            return chromeSession.DownloadFile(&filename, chromeOptions, 
-                chromedp.Click(".download-button"),
+            return chromedp.Do(chromeSession.Ctx,
+                chromeSession.DownloadFile(&filename, chromeOptions,
+                    chromedp.Click(chromedp.CSS(".download-button")),
+                ),
             )
         }
         return err
@@ -417,17 +419,32 @@ func advancedDownload(scraperInstance scraper.UnifiedScraper) error {
 }
 ```
 
-## 新機能: ActionFunc対応
+## chromedp v0.19 への移行（破壊的変更）
 
-v0.0.49より、ChromeSessionのメソッドがActionFuncを返すようになり、`chromedp.Run`内で複数のアクションを組み合わせて実行できるようになりました。
+Go 1.27 以上が必要です。chromedp v0.19.1 / cdproto v0.157.4 への更新に伴い、Chrome アクションを直接組み合わせる利用コードも修正してください。
 
-### ActionFuncを使用した高効率実行
+- `SaveHtml`、`SaveFile`、`DownloadFile`、`Navigate`、`WaitVisible`、`SendKeys`、`Click`、`Sleep` の戻り値は `chromedp.Action[chromedp.Void]` です。`DownloadFile` の可変長引数も同じ型です。
+- 複数のアクションは `chromedp.Do(ctx, actions...)` で実行します。旧 `action.Do(ctx)` や `action(ctx)` も `chromedp.Do(ctx, action)` に置き換えてください。
+- 値を取得するときは `title, err := chromedp.Run(ctx, chromedp.Title())` のように戻り値を受け取ります。
+- 標準 chromedp の CSS セレクターは `chromedp.CSS("#id")` を指定します。ChromeSession の `WaitVisible`・`SendKeys`・`Click` は引き続き CSS 文字列を受け取ります。
+- 独自アクションは `chromedp.Func(func(ctx context.Context, target *chromedp.Target) error { ... })` で作成します。
+- `UnifiedScraper` の `DoNavigate` など、エラーを直接返すメソッドの呼び出し方は同じです。
+
+Chrome の接続は chromedp の標準である pipe を使用します。`NewChromeOptions.Headless: false` は `VisibleWindow` に対応させ、ウィンドウを表示する動作を維持しています。
+
+詳細は [chromedp の移行ガイド](https://github.com/chromedp/chromedp/blob/v0.19.1/docs/MIGRATION.md) を参照してください。
+
+## Chrome アクションの組み合わせ
+
+ChromeSession のアクションメソッドは `chromedp.Action[chromedp.Void]` を返します。`chromedp.Do` で複数のアクションを順に実行できます。
+
+### アクションの連続実行
 
 **新しい書き方（推奨）:**
 
 ```go
 // 複数のアクションを一度に実行
-err := chromedp.Run(chromeSession.Ctx,
+err := chromedp.Do(chromeSession.Ctx,
     chromeSession.Navigate("https://example.com"),
     chromeSession.WaitVisible("h1"),
     chromeSession.SendKeys("#input", "value"),
@@ -450,7 +467,7 @@ err = chromeSession.DoSendKeys("#input", "value")
 if err != nil { return err }
 ```
 
-### ActionFuncの利点
+### アクションの利点
 
 1. **パフォーマンス向上**: 複数のアクションをバッチ実行
 2. **エラーハンドリングの簡素化**: 一箇所でエラーを処理
@@ -458,11 +475,10 @@ if err != nil { return err }
 
 ```go
 // 標準のchromedpアクションと組み合わせ
-err := chromedp.Run(chromeSession.Ctx,
+err := chromedp.Do(chromeSession.Ctx,
     chromeSession.Navigate("https://example.com"),
-    chromedp.Screenshot("screenshot.png"),  // 標準chromedp
     chromeSession.WaitVisible("#content"),
-    chromedp.SetValue("#input", "value"),   // 標準chromedp
+    chromedp.SetValue(chromedp.CSS("#input"), "value"),   // 標準chromedp
     chromeSession.Click("#submit"),
 )
 ```
@@ -473,8 +489,8 @@ err := chromedp.Run(chromeSession.Ctx,
 
 1. **Chrome版とHTTP版のコードが統一される**
 2. **実行時にスクレイピング方法を切り替え可能**
-3. **既存コードは完全に保持される**
+3. **統一インターフェースの呼び出し方を共通化できる**
 4. **段階的な移行が可能**
-5. **新しいActionFunc機能によりパフォーマンスが向上**
+5. **アクションをまとめて記述できる**
 
 移行は急ぐ必要はありません。新しい機能から統一インターフェースを使用し、既存コードは必要に応じて徐々に移行してください。

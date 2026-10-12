@@ -66,7 +66,7 @@ func TestChromeUnmarshal(t *testing.T) {
 
 	ctx := NewTestChromeContext(t, 30*time.Second)
 
-	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +333,7 @@ func TestChromeUnmarshalWithUnmarshaller(t *testing.T) {
 
 	ctx := NewTestChromeContext(t, 30*time.Second)
 
-	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestChromeUnmarshalNthChildErrors(t *testing.T) {
 
 	ctx := NewTestChromeContext(t, 30*time.Second)
 
-	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestChromeUnmarshalFirstLastChildSelectors(t *testing.T) {
 
 	ctx := NewTestChromeContext(t, 30*time.Second)
 
-	err := chromedp.Run(ctx, chromedp.Navigate(ts.URL))
+	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
 		t.Fatal(err)
 	}

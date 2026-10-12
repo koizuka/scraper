@@ -210,8 +210,6 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 		return fmt.Errorf("`attr` tag must be empty for struct")
 	}
 
-	var tasks chromedp.Tasks
-
 	const FindTag = "find"
 	const AttrTag = "attr"
 	const TimeTag = "time"
@@ -241,40 +239,41 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 		if selector != "" {
 			query = fmt.Sprintf("%v %v", query, selector)
 		}
-		tasks = append(tasks, chromedp.NodeIDs(query, &tempValues[i].Nodes, chromedp.AtLeast(0)))
-	}
-	if err := chromedp.Run(ctx, tasks); err != nil {
-		return err
+		nodes, err := chromedp.Run(ctx, chromedp.QueryNodeIDs(query, chromedp.AtLeast(0)))
+		if err != nil {
+			return err
+		}
+		tempValues[i].Nodes = nodes
 	}
 
 	// get texts
-	tasks = []chromedp.Action{}
 	for i := 0; i < vt.NumField(); i++ {
 		fieldType := vt.Field(i)
 
 		tempValues[i].Texts = make([]tempItem, len(tempValues[i].Nodes))
 		for j, nodeId := range tempValues[i].Nodes {
 			nodeIds := []cdp.NodeID{nodeId}
-			var action chromedp.Action
+			var err error
 			result := &tempValues[i].Texts[j]
 			_, isHtml := fieldType.Tag.Lookup(HtmlTag)
 			if isHtml {
 				result.Ok = true
-				action = chromedp.InnerHTML(nodeIds, &result.Text, chromedp.ByNodeID)
+				result.Text, err = chromedp.Run(ctx, chromedp.InnerHTML(nodeIds))
 			} else {
 				attr := fieldType.Tag.Get(AttrTag)
 				if attr != "" {
-					action = chromedp.AttributeValue(nodeIds, attr, &result.Text, &result.Ok, chromedp.ByNodeID)
+					var attribute chromedp.AttributeResult
+					attribute, err = chromedp.Run(ctx, chromedp.AttributeValue(nodeIds, attr))
+					result.Text, result.Ok = attribute.Value, attribute.Exists
 				} else {
 					result.Ok = true
-					action = chromedp.Text(nodeIds, &result.Text, chromedp.ByNodeID)
+					result.Text, err = chromedp.Run(ctx, chromedp.Text(nodeIds))
 				}
 			}
-			tasks = append(tasks, action)
+			if err != nil {
+				return err
+			}
 		}
-	}
-	if err := chromedp.Run(ctx, tasks); err != nil {
-		return err
 	}
 
 	// fill results

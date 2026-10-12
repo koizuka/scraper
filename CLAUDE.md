@@ -114,7 +114,7 @@ defer cancel()
 // Use ActionCtx for individual actions
 actionCtx, actionCancel := chromeSession.ActionCtx()
 defer actionCancel()
-err = chromedp.Run(actionCtx, chromedp.WaitVisible(selector, chromedp.ByQuery))
+err = chromedp.Do(actionCtx, chromedp.WaitVisible(chromedp.CSS(selector)))
 ```
 
 ### Data Extraction

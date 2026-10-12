@@ -3,6 +3,7 @@ package scraper
 import (
 	"context"
 	"errors"
+	"github.com/chromedp/chromedp"
 	"os"
 	"path"
 	"testing"
@@ -54,7 +55,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		}
 
 		action := chromeSession.SaveFile(&sourceFile)
-		err = action(chromeSession.Ctx)
+		err = chromedp.Do(chromeSession.Ctx, action)
 		if err != nil {
 			t.Errorf("SaveFile() in replay mode error: %v", err)
 			return
@@ -88,7 +89,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 
 		// Test SaveHtml with missing file
 		action := chromeSession.SaveHtml(nil)
-		err = action.Do(chromeSession.Ctx)
+		err = chromedp.Do(chromeSession.Ctx, action)
 
 		var retryErr RetryAndRecordError
 		if err == nil {
@@ -142,7 +143,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		// Call SaveHtml multiple times and verify counter increments
 		for i := 1; i <= 3; i++ {
 			action := chromeSession.SaveHtml(nil)
-			err = action.Do(chromeSession.Ctx)
+			err = chromedp.Do(chromeSession.Ctx, action)
 			if err != nil {
 				t.Errorf("SaveHtml() call %d error: %v", i, err)
 				return
@@ -331,7 +332,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		// Test with specific glob pattern
 		var filename string
 		action := chromeSession.DownloadFile(&filename, DownloadFileOptions{Glob: "*.csv"})
-		err = action(nil)
+		_, err = action(nil, nil)
 		if err != nil {
 			t.Errorf("DownloadFile() with CSV glob error: %v", err)
 			return
@@ -386,7 +387,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		// SaveHtml should work in replay mode even with cancelled context
 		// because it doesn't perform browser operations
 		action := chromeSession.SaveHtml(nil)
-		err = action.Do(ctx)
+		_, err = action(ctx, nil)
 		if err != nil {
 			t.Errorf("SaveHtml should work in replay mode even with cancelled context: %v", err)
 			return

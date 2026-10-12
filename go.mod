@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
-	github.com/chromedp/cdproto v0.157.4
+	github.com/chromedp/cdproto v0.157.7
 	github.com/chromedp/chromedp v0.19.1
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/google/go-cmp v0.7.0

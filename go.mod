@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
-	github.com/chromedp/cdproto v0.157.7
+	github.com/chromedp/cdproto v0.157.9
 	github.com/chromedp/chromedp v0.19.1
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/google/go-cmp v0.7.0
@@ -14,6 +14,7 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.4 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/kr/text v0.1.0 // indirect
 	go4.org v0.0.0-20190313082347-94abd6928b1d // indirect
 	golang.org/x/net v0.58.0 // indirect

@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/chromedp/cdproto v0.157.9
-	github.com/chromedp/chromedp v0.20.1
+	github.com/chromedp/chromedp v0.21.0
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/google/go-cmp v0.7.0
 	github.com/orirawlings/persistent-cookiejar v0.3.2

@@ -741,3 +741,16 @@ func TestChromeSession_BrowserCtxSurvivesTimeout(t *testing.T) {
 		t.Errorf("title = %q, want %q", title, "still alive")
 	}
 }
+
+func TestIsStaleNodeError(t *testing.T) {
+	if isStaleNodeError(nil) {
+		t.Error("nil should not be a stale node error")
+	}
+	if isStaleNodeError(fmt.Errorf("other error")) {
+		t.Error("unrelated error should not be a stale node error")
+	}
+	err := fmt.Errorf("could not retrieve attribute %q: %w", "outerHTML", fmt.Errorf("No node with given id found (-32000)"))
+	if !isStaleNodeError(err) {
+		t.Error("expected stale node error to be detected")
+	}
+}

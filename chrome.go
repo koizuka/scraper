@@ -269,6 +269,37 @@ func (session *Session) NewChrome() (*ChromeSession, context.CancelFunc, error) 
 	return session.NewChromeOpt(NewChromeOptions{Headless: false})
 }
 
+// Retry settings for outerHTMLWithRetry
+const (
+	outerHTMLMaxAttempts = 5
+	outerHTMLRetryDelay  = 100 * time.Millisecond
+)
+
+// isStaleNodeError reports whether err is the CDP error returned when the DOM
+// node was discarded (e.g. by a page navigation) while it was being read.
+func isStaleNodeError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "No node with given id found")
+}
+
+// outerHTMLWithRetry gets the outer HTML of the document, retrying when the
+// node disappears because a navigation was in progress (e.g. right after a click).
+func outerHTMLWithRetry(ctx context.Context) (string, error) {
+	var html string
+	var err error
+	for attempt := 0; attempt < outerHTMLMaxAttempts; attempt++ {
+		html, err = chromedp.Run(ctx, chromedp.OuterHTML(chromedp.CSS("html")))
+		if !isStaleNodeError(err) {
+			return html, err
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(outerHTMLRetryDelay):
+		}
+	}
+	return html, err
+}
+
 func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctxt context.Context, _ *chromedp.Target) error {
 		session.invokeCount++
@@ -291,7 +322,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromed
 			return nil
 		} else {
 			// Record mode: get HTML from browser and save
-			html, err := chromedp.Run(ctxt, chromedp.OuterHTML(chromedp.CSS("html")))
+			html, err := outerHTMLWithRetry(ctxt)
 			if err != nil {
 				return err
 			}

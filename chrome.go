@@ -288,7 +288,7 @@ func outerHTMLWithRetry(ctx context.Context) (string, error) {
 	var err error
 	for attempt := 0; attempt < outerHTMLMaxAttempts; attempt++ {
 		html, err = chromedp.Run(ctx, chromedp.OuterHTML(chromedp.CSS("html")))
-		if !isStaleNodeError(err) {
+		if !isStaleNodeError(err) || attempt == outerHTMLMaxAttempts-1 {
 			return html, err
 		}
 		select {
@@ -297,7 +297,7 @@ func outerHTMLWithRetry(ctx context.Context) (string, error) {
 		case <-time.After(outerHTMLRetryDelay):
 		}
 	}
-	return html, err
+	return html, err // unreachable: the last attempt returns inside the loop
 }
 
 func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromedp.Void] {

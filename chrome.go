@@ -136,7 +136,12 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 			chromedp.DisableGPU,
 		)
 	} else {
-		allocOptions = append(allocOptions, chromedp.VisibleWindow)
+		// chromedp v0.21's VisibleWindow adds start-maximized; turn it back off
+		// so the window opens at Chrome's default size.
+		allocOptions = append(allocOptions,
+			chromedp.VisibleWindow,
+			chromedp.Flag("start-maximized", false),
+		)
 	}
 
 	// Add any extra allocator options

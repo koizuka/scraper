@@ -6,7 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/chromedp/cdproto v0.158.3
 	github.com/chromedp/chromedp v0.21.0
-	github.com/dimchansky/utfbom v1.1.1
+	github.com/dimchansky/utfbom v1.2.0
 	github.com/google/go-cmp v0.7.0
 	github.com/orirawlings/persistent-cookiejar v0.3.2
 	golang.org/x/text v0.43.0

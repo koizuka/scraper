@@ -6,8 +6,8 @@ github.com/chromedp/cdproto v0.158.3 h1:vLLW+mou2kaaol1Z7E5hFhoqFoEDMJYic/7lG8Fs
 github.com/chromedp/cdproto v0.158.3/go.mod h1:h68JaIuFr9o3yiayxEYhBdvaxgYO3shDrPSYhNlyfu0=
 github.com/chromedp/chromedp v0.21.0 h1:nVHgS2LHyhZJ1l3BWRbG2eFIFYiJMnvkJbELbd8WBoQ=
 github.com/chromedp/chromedp v0.21.0/go.mod h1:6z1Y5FdKUxRzxx2qcC5h1xjaBJrSWrZp1mjgITfNZig=
-github.com/dimchansky/utfbom v1.1.1 h1:vV6w1AhK4VMnhBno/TPVCoK9U/LP0PkLCS9tbxHdi/U=
-github.com/dimchansky/utfbom v1.1.1/go.mod h1:SxdoEBH5qIqFocHMyGOXVAybYJdr71b1Q/j0mACtrfE=
+github.com/dimchansky/utfbom v1.2.0 h1:ikiGYT9Wa8zleQ0xrlAWC9Ar9LNInSWRodJ5MkHB3d4=
+github.com/dimchansky/utfbom v1.2.0/go.mod h1:kJPs9PFVyF/LnFVVGz+XXvouv0KxympBxr0pSwv0KQU=
 github.com/frankban/quicktest v0.0.0-20171023143956-9332c2fb618e h1:LN7YRsIDybsmepzdm9hb+Lk++BVqwWZC6jOGSDAdkOs=
 github.com/frankban/quicktest v0.0.0-20171023143956-9332c2fb618e/go.mod h1:1Bb+ZdFimNFekaSbjJw9uAMDBC4SvpBzuk2wc0U1Dqk=
 github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 h1:XGPtjxqp0FS8jj1Z7QGcSOSgyq1fUPjNyJXvi3KfI4A=

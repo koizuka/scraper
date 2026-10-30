@@ -29,3 +29,14 @@ jobs:
       env:
         TZ: Asia/Tokyo
         CI: true
+
+    - name: Build chrome module
+      working-directory: chrome
+      run: go build -v ./...
+
+    - name: Test chrome module
+      working-directory: chrome
+      run: go test -v ./...
+      env:
+        TZ: Asia/Tokyo
+        CI: true

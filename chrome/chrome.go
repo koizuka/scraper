@@ -1,4 +1,4 @@
-package scraper
+package chrome
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"github.com/koizuka/scraper"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,7 +27,7 @@ const (
 	DefaultBlankURL = "about:blank"
 )
 
-// ChromeSession holds the state for a Chrome browser session.
+// Session holds the state for a Chrome browser session.
 //
 // Ctx is the operation context, which may have a timeout applied.
 // Use Ctx for all normal Chrome operations (navigation, clicks, queries).
@@ -39,8 +40,8 @@ const (
 //	    _ = chromedp.Cancel(chromeSession.BrowserCtx)
 //	    cancel()
 //	}()
-type ChromeSession struct {
-	*Session
+type Session struct {
+	*scraper.Session
 	Ctx           context.Context // Operation context (may have timeout applied)
 	BrowserCtx    context.Context // Browser context without timeout (for graceful shutdown)
 	DownloadPath  string
@@ -50,7 +51,7 @@ type ChromeSession struct {
 
 // captureCurrentHtml safely captures the current HTML page content
 // This is called before Chrome operations to preserve state for debugging timeouts
-func (session *ChromeSession) captureCurrentHtml(ctx context.Context) {
+func (session *Session) captureCurrentHtml(ctx context.Context) {
 	// Use defer/recover to safely handle any panics from chromedp operations
 	defer func() {
 		if r := recover(); r != nil {
@@ -75,14 +76,14 @@ func (session *ChromeSession) captureCurrentHtml(ctx context.Context) {
 // SaveLastHtmlSnapshot saves the last HTML content to a timestamped snapshot file
 // This is useful for debugging timeouts - call this when an error occurs
 // Multiple snapshots are preserved to track timeout sequences
-func (session *ChromeSession) SaveLastHtmlSnapshot() error {
+func (session *Session) SaveLastHtmlSnapshot() error {
 	if session.lastHtml == "" {
 		return nil // Nothing to save
 	}
 
 	// Use timestamp to avoid overwriting previous snapshots
 	timestamp := time.Now().Format("20060102-150405")
-	filename := path.Join(session.getDirectory(), fmt.Sprintf("snapshot-%s.html", timestamp))
+	filename := path.Join(session.GetDirectory(), fmt.Sprintf("snapshot-%s.html", timestamp))
 
 	err := os.WriteFile(filename, []byte(session.lastHtml), DefaultFilePermission)
 	if err != nil {
@@ -102,14 +103,14 @@ func (session *ChromeSession) SaveLastHtmlSnapshot() error {
 //	actionCtx, cancel := chromeSession.ActionCtx()
 //	defer cancel()
 //	err := chromedp.Do(actionCtx, chromedp.WaitVisible(chromedp.CSS(selector)))
-func (session *ChromeSession) ActionCtx() (context.Context, context.CancelFunc) {
+func (session *Session) ActionCtx() (context.Context, context.CancelFunc) {
 	if session.ActionTimeout > 0 {
 		return context.WithTimeout(session.Ctx, session.ActionTimeout)
 	}
 	return session.Ctx, func() {}
 }
 
-type NewChromeOptions struct {
+type Options struct {
 	Headless          bool
 	Timeout           time.Duration
 	ActionTimeout     time.Duration // Timeout for individual actions (0 = no timeout)
@@ -117,7 +118,9 @@ type NewChromeOptions struct {
 	UserDataDir       string // Chrome user data directory ("" = ./chromeUserData)
 }
 
-func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *ChromeSession, cancelFunc context.CancelFunc, err error) {
+// New starts a Chrome browser bound to session and returns a Session.
+// The returned cancel function must be called to shut down the browser.
+func New(session *scraper.Session, options Options) (chromeSession *Session, cancelFunc context.CancelFunc, err error) {
 	userDataDir := options.UserDataDir
 	if userDataDir == "" {
 		userDataDir = "./chromeUserData"
@@ -149,7 +152,7 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		allocOptions = append(allocOptions, options.ExtraAllocOptions...)
 	}
 
-	downloadPath, err := filepath.Abs(path.Join(session.getDirectory(), "chrome"))
+	downloadPath, err := filepath.Abs(path.Join(session.GetDirectory(), "chrome"))
 	if err != nil {
 		return nil, func() {}, err
 	}
@@ -169,7 +172,7 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 		ctxt, timeoutCancel = context.WithTimeout(browserCtx, options.Timeout)
 	}
 
-	chromeSession = &ChromeSession{
+	chromeSession = &Session{
 		Session:       session,
 		Ctx:           ctxt,       // Operation context (may have timeout)
 		BrowserCtx:    browserCtx, // Browser context without timeout (for graceful shutdown)
@@ -212,21 +215,21 @@ func (session *Session) NewChromeOpt(options NewChromeOptions) (chromeSession *C
 }
 
 // loadSavedHTMLToBrowser loads saved HTML content into the browser for replay mode
-func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
+func (session *Session) loadSavedHTMLToBrowser(filename string) error {
 	// Read the saved HTML file
 	htmlBytes, err := os.ReadFile(filename)
 	if err != nil {
-		return RetryAndRecordError{filename}
+		return scraper.RetryAndRecordError{Filename: filename}
 	}
 
 	html := string(htmlBytes)
 
 	// Try to load metadata for URL information
-	metadata, err := loadPageMetadata(filename)
+	metadata, err := scraper.LoadPageMetadata(filename)
 	if err != nil {
 		// If metadata is not available, just load the HTML without URL context
-		session.Printf("%s WARNING: failed to load metadata for %s: %v", session.getDebugPrefix(), filename, err)
-		metadata = PageMetadata{URL: DefaultBlankURL}
+		session.Printf("%s WARNING: failed to load metadata for %s: %v", session.DebugPrefix(), filename, err)
+		metadata = scraper.PageMetadata{URL: DefaultBlankURL}
 	}
 
 	// Load HTML into browser by writing to a temp file and loading it
@@ -266,12 +269,8 @@ func (session *ChromeSession) loadSavedHTMLToBrowser(filename string) error {
 		_ = chromedp.Do(session.Ctx, chromedp.Evaluate[chromedp.Void](script))
 	}
 
-	session.Printf("%s REPLAY LOADED: %s (%d bytes)", session.getDebugPrefix(), filename, len(html))
+	session.Printf("%s REPLAY LOADED: %s (%d bytes)", session.DebugPrefix(), filename, len(html))
 	return nil
-}
-
-func (session *Session) NewChrome() (*ChromeSession, context.CancelFunc, error) {
-	return session.NewChromeOpt(NewChromeOptions{Headless: false})
 }
 
 // Retry settings for outerHTMLWithRetry
@@ -305,10 +304,10 @@ func outerHTMLWithRetry(ctx context.Context) (string, error) {
 	return html, err // unreachable: the last attempt returns inside the loop
 }
 
-func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromedp.Void] {
+func (session *Session) SaveHtml(filename *string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctxt context.Context, _ *chromedp.Target) error {
-		session.invokeCount++
-		fn := session.getHtmlFilename()
+		session.InvokeCount++
+		fn := session.HtmlFilename()
 
 		if filename != nil {
 			*filename = fn
@@ -316,7 +315,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromed
 
 		if session.NotUseNetwork {
 			// Replay mode: load from saved file and load it into the browser
-			session.Printf("%s LOAD from %v\n", session.getDebugPrefix(), fn)
+			session.Printf("%s LOAD from %v\n", session.DebugPrefix(), fn)
 
 			// Load the saved HTML into the browser so DOM operations work
 			err := session.loadSavedHTMLToBrowser(fn)
@@ -339,7 +338,7 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromed
 			if err != nil {
 				return err
 			}
-			session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), fn, len(body))
+			session.Printf("%s SAVE to %v (%v bytes)\n", session.DebugPrefix(), fn, len(body))
 
 			// Save metadata for replay mode
 			currentURL, err := chromedp.Run(ctxt, chromedp.Location())
@@ -355,12 +354,12 @@ func (session *ChromeSession) SaveHtml(filename *string) chromedp.Action[chromed
 			}
 
 			// Save unified metadata
-			metadata := PageMetadata{
+			metadata := scraper.PageMetadata{
 				URL:         currentURL,
 				ContentType: "text/html", // Chrome pages are typically HTML
 				Title:       title,
 			}
-			err = savePageMetadata(fn, metadata)
+			err = scraper.SavePageMetadata(fn, metadata)
 			if err != nil {
 				session.Printf("Warning: failed to save metadata: %v", err)
 			}
@@ -383,7 +382,7 @@ func (e *DownloadedFileNameNotSatisfiedError) Error() string {
 	return fmt.Sprintf("downloaded filename %v is not match to %v", e.DownloadedFilename, e.Glob)
 }
 
-func (session *ChromeSession) DownloadFile(filename *string, options DownloadFileOptions, actions ...chromedp.Action[chromedp.Void]) chromedp.Action[chromedp.Void] {
+func (session *Session) DownloadFile(filename *string, options DownloadFileOptions, actions ...chromedp.Action[chromedp.Void]) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctxt context.Context, _ *chromedp.Target) error {
 		if filename == nil {
 			return fmt.Errorf("filename parameter cannot be nil in DownloadFile")
@@ -405,23 +404,23 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 
 		if session.NotUseNetwork {
 			// Replay mode: find previously downloaded file
-			session.Printf("%s REPLAY DOWNLOAD: Looking for files matching %v\n", session.getDebugPrefix(), options.Glob)
+			session.Printf("%s REPLAY DOWNLOAD: Looking for files matching %v\n", session.DebugPrefix(), options.Glob)
 			files, err := os.ReadDir(session.DownloadPath)
 			if err != nil {
-				return RetryAndRecordError{session.DownloadPath}
+				return scraper.RetryAndRecordError{Filename: session.DownloadPath}
 			}
 
 			// Find the first file that matches the glob pattern
 			for _, file := range files {
 				if match, _ := filepath.Match(options.Glob, file.Name()); match {
 					*filename = path.Join(session.DownloadPath, file.Name())
-					session.Printf("%s REPLAY DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+					session.Printf("%s REPLAY DOWNLOADED: %v\n", session.DebugPrefix(), *filename)
 					return nil
 				}
 			}
 
 			// No matching file found in replay mode
-			return RetryAndRecordError{fmt.Sprintf("no files matching pattern '%s' found in download directory '%s' for replay mode", options.Glob, session.DownloadPath)}
+			return scraper.RetryAndRecordError{Filename: fmt.Sprintf("no files matching pattern '%s' found in download directory '%s' for replay mode", options.Glob, session.DownloadPath)}
 		} else {
 			// Record mode: perform actual download
 			download := make(chan string)
@@ -527,7 +526,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					// Timeout: return file from directory if available
 					if found, matchErr := checkDownloadDir(); found != "" {
 						*filename = found
-						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+						session.Printf("%s DOWNLOADED: %v\n", session.DebugPrefix(), *filename)
 						return nil
 					} else if matchErr != nil {
 						return matchErr
@@ -539,15 +538,15 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					began, suggested := downloadBegan, suggestedFilename
 					downloadMu.Unlock()
 					session.Printf("%s DOWNLOAD TIMEOUT after %v: downloadBegan=%v, suggestedFilename=%q, glob=%q",
-						session.getDebugPrefix(), time.Since(startTime).Round(time.Millisecond), began, suggested, options.Glob)
-					session.Printf("%s DOWNLOAD TIMEOUT: %s", session.getDebugPrefix(), describeDownloadDir(session.DownloadPath, startTime))
+						session.DebugPrefix(), time.Since(startTime).Round(time.Millisecond), began, suggested, options.Glob)
+					session.Printf("%s DOWNLOAD TIMEOUT: %s", session.DebugPrefix(), describeDownloadDir(session.DownloadPath, startTime))
 					return downloadCtx.Err()
 
 				case <-ticker.C:
 					// Polling: return immediately if completed file found
 					if found, _ := checkDownloadDir(); found != "" {
 						*filename = found
-						session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+						session.Printf("%s DOWNLOADED: %v\n", session.DebugPrefix(), *filename)
 						return nil
 					}
 
@@ -561,7 +560,7 @@ func (session *ChromeSession) DownloadFile(filename *string, options DownloadFil
 					}
 
 					*filename = downloaded
-					session.Printf("%s DOWNLOADED: %v\n", session.getDebugPrefix(), *filename)
+					session.Printf("%s DOWNLOADED: %v\n", session.DebugPrefix(), *filename)
 					return nil
 				}
 			}
@@ -603,14 +602,14 @@ func describeDownloadDir(dir string, startTime time.Time) string {
  * SaveFile saves file to filename
  * filename: DownloadFile の結果を chromedp.Do で続ける場合、ポインタにしないと実行前の値が渡ってしまうため、ポインタにする
  */
-func (session *ChromeSession) SaveFile(filename *string) chromedp.Action[chromedp.Void] {
+func (session *Session) SaveFile(filename *string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
-		session.invokeCount++
+		session.InvokeCount++
 		if filename == nil {
 			return fmt.Errorf("filename parameter cannot be nil in SaveFile")
 		}
 
-		fn := session.getHtmlFilename()
+		fn := session.HtmlFilename()
 
 		// change extension with filename
 		fn = strings.TrimSuffix(fn, filepath.Ext(fn)) + filepath.Ext(*filename)
@@ -618,9 +617,9 @@ func (session *ChromeSession) SaveFile(filename *string) chromedp.Action[chromed
 		if session.NotUseNetwork {
 			// Replay mode: check if saved file exists
 			if _, err := os.Stat(fn); os.IsNotExist(err) {
-				return RetryAndRecordError{fn}
+				return scraper.RetryAndRecordError{Filename: fn}
 			}
-			session.Printf("%s REPLAY SAVE: file already exists %v\n", session.getDebugPrefix(), fn)
+			session.Printf("%s REPLAY SAVE: file already exists %v\n", session.DebugPrefix(), fn)
 			return nil
 		} else {
 			// Record mode: perform actual file save
@@ -632,13 +631,13 @@ func (session *ChromeSession) SaveFile(filename *string) chromedp.Action[chromed
 			if err != nil {
 				return err
 			}
-			session.Printf("%s SAVE %v to %v (%v bytes)\n", session.getDebugPrefix(), *filename, fn, len(body))
+			session.Printf("%s SAVE %v to %v (%v bytes)\n", session.DebugPrefix(), *filename, fn, len(body))
 			return nil
 		}
 	})
 }
 
-func (session *ChromeSession) actionChrome(action chromedp.Action[chromedp.Void]) (*network.Response, error) {
+func (session *Session) actionChrome(action chromedp.Action[chromedp.Void]) (*network.Response, error) {
 	var filename string
 
 	if session.NotUseNetwork {
@@ -683,24 +682,24 @@ func (session *ChromeSession) actionChrome(action chromedp.Action[chromedp.Void]
 	}
 }
 
-// RunNavigate navigates to page URL and download html like Session.invoke
-func (session *ChromeSession) RunNavigate(URL string) (*network.Response, error) {
+// RunNavigate navigates to page URL and download html like scraper.Session.invoke
+func (session *Session) RunNavigate(URL string) (*network.Response, error) {
 	return session.actionChrome(chromedp.Navigate(URL))
 }
 
-func (session *ChromeSession) Unmarshal(v interface{}, cssSelector string, opt UnmarshalOption) error {
-	return ChromeUnmarshal(session.Ctx, v, cssSelector, opt)
+func (session *Session) Unmarshal(v interface{}, cssSelector string, opt scraper.UnmarshalOption) error {
+	return Unmarshal(session.Ctx, v, cssSelector, opt)
 }
 
 // GetCurrentURL returns the current page URL
-func (session *ChromeSession) GetCurrentURL() (string, error) {
+func (session *Session) GetCurrentURL() (string, error) {
 	if session.NotUseNetwork {
 		// Replay mode: load URL from saved metadata file
-		// Use current invokeCount to get the right filename
-		fn := fmt.Sprintf("%v/%v.html", session.getDirectory(), session.invokeCount)
+		// Use current InvokeCount to get the right filename
+		fn := fmt.Sprintf("%v/%v.html", session.GetDirectory(), session.InvokeCount)
 
 		// Load unified metadata file
-		metadata, err := loadPageMetadata(fn)
+		metadata, err := scraper.LoadPageMetadata(fn)
 		if err != nil {
 			return "", fmt.Errorf("failed to load metadata: %v", err)
 		}
@@ -721,10 +720,10 @@ func (session *ChromeSession) GetCurrentURL() (string, error) {
 	}
 }
 
-// UnifiedScraper interface implementation for ChromeSession
+// UnifiedScraper interface implementation for Session
 
 // Navigate returns an Action[chromedp.Void] that handles navigation with replay support
-func (chromeSession *ChromeSession) Navigate(url string) chromedp.Action[chromedp.Void] {
+func (chromeSession *Session) Navigate(url string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
 		if chromeSession.NotUseNetwork {
 			// Replay mode: increment counter and load saved HTML
@@ -741,7 +740,7 @@ func (chromeSession *ChromeSession) Navigate(url string) chromedp.Action[chromed
 }
 
 // WaitVisible returns an Action[chromedp.Void] that handles wait visible with replay support
-func (chromeSession *ChromeSession) WaitVisible(selector string) chromedp.Action[chromedp.Void] {
+func (chromeSession *Session) WaitVisible(selector string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
 		if chromeSession.NotUseNetwork {
 			// Replay mode: load saved HTML first, then check if element is visible
@@ -772,7 +771,7 @@ func (chromeSession *ChromeSession) WaitVisible(selector string) chromedp.Action
 }
 
 // SendKeys returns an Action[chromedp.Void] that handles sending keys with replay support
-func (chromeSession *ChromeSession) SendKeys(selector, value string) chromedp.Action[chromedp.Void] {
+func (chromeSession *Session) SendKeys(selector, value string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
 		if chromeSession.NotUseNetwork {
 			// Replay mode: simulate action by loading next saved page
@@ -788,7 +787,7 @@ func (chromeSession *ChromeSession) SendKeys(selector, value string) chromedp.Ac
 }
 
 // Click returns an Action[chromedp.Void] that handles clicking with replay support
-func (chromeSession *ChromeSession) Click(selector string) chromedp.Action[chromedp.Void] {
+func (chromeSession *Session) Click(selector string) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
 		if chromeSession.NotUseNetwork {
 			// Replay mode: simulate click action by loading next saved page
@@ -804,7 +803,7 @@ func (chromeSession *ChromeSession) Click(selector string) chromedp.Action[chrom
 }
 
 // SubmitForm implements UnifiedScraper.SubmitForm
-func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[string]string) error {
+func (chromeSession *Session) SubmitForm(formSelector string, params map[string]string) error {
 	if chromeSession.NotUseNetwork {
 		// Replay mode: simulate form submission by loading next saved page
 		return chromedp.Do(chromeSession.Ctx, chromeSession.SaveHtml(nil))
@@ -858,7 +857,7 @@ func (chromeSession *ChromeSession) SubmitForm(formSelector string, params map[s
 }
 
 // FollowAnchor implements UnifiedScraper.FollowAnchor
-func (chromeSession *ChromeSession) FollowAnchor(text string) error {
+func (chromeSession *Session) FollowAnchor(text string) error {
 	if chromeSession.NotUseNetwork {
 		// Replay mode: simulate anchor following by loading next saved page
 		return chromedp.Do(chromeSession.Ctx, chromeSession.SaveHtml(nil))
@@ -912,7 +911,7 @@ func escapeXPathText(text string) string {
 }
 
 // SavePage implements UnifiedScraper.SavePage (calls existing SaveHtml action)
-func (chromeSession *ChromeSession) SavePage() (string, error) {
+func (chromeSession *Session) SavePage() (string, error) {
 	var filename string
 	action := chromeSession.SaveHtml(&filename)
 	err := chromedp.Do(chromeSession.Ctx, action)
@@ -920,16 +919,26 @@ func (chromeSession *ChromeSession) SavePage() (string, error) {
 }
 
 // ExtractData implements UnifiedScraper.ExtractData
-func (chromeSession *ChromeSession) ExtractData(v interface{}, selector string, opt UnmarshalOption) error {
-	return ChromeUnmarshal(chromeSession.Ctx, v, selector, opt)
+func (chromeSession *Session) ExtractData(v interface{}, selector string, opt scraper.UnmarshalOption) error {
+	return Unmarshal(chromeSession.Ctx, v, selector, opt)
+}
+
+// ExtractDataWithContext implements scraper.ContextExtractor
+func (chromeSession *Session) ExtractDataWithContext(ctx context.Context, v interface{}, selector string, opt scraper.UnmarshalOption) error {
+	return Unmarshal(ctx, v, selector, opt)
+}
+
+// ScraperType implements scraper.ScraperTyper
+func (chromeSession *Session) ScraperType() scraper.ScraperType {
+	return scraper.ChromeScraper
 }
 
 // DownloadResource implements UnifiedScraper.DownloadResource
-func (chromeSession *ChromeSession) DownloadResource(options UnifiedDownloadOptions) (string, error) {
+func (chromeSession *Session) DownloadResource(options scraper.UnifiedDownloadOptions) (string, error) {
 	// Set default timeout if not specified
 	timeout := options.Timeout
 	if timeout == 0 {
-		timeout = DefaultDownloadTimeout
+		timeout = scraper.DefaultDownloadTimeout
 	}
 
 	var filename string
@@ -951,63 +960,63 @@ func (chromeSession *ChromeSession) DownloadResource(options UnifiedDownloadOpti
 }
 
 // GetDebugStep implements UnifiedScraper.GetDebugStep
-func (chromeSession *ChromeSession) GetDebugStep() string {
+func (chromeSession *Session) GetDebugStep() string {
 	return chromeSession.Session.GetDebugStep()
 }
 
 // SetDebugStep implements UnifiedScraper.SetDebugStep
-func (chromeSession *ChromeSession) SetDebugStep(step string) {
+func (chromeSession *Session) SetDebugStep(step string) {
 	chromeSession.Session.SetDebugStep(step)
 }
 
 // ClearDebugStep implements UnifiedScraper.ClearDebugStep
-func (chromeSession *ChromeSession) ClearDebugStep() {
+func (chromeSession *Session) ClearDebugStep() {
 	chromeSession.Session.ClearDebugStep()
 }
 
 // Printf implements UnifiedScraper.Printf
-func (chromeSession *ChromeSession) Printf(format string, a ...interface{}) {
+func (chromeSession *Session) Printf(format string, a ...interface{}) {
 	chromeSession.Session.Printf(format, a...)
 }
 
 // Sleep returns an Action[chromedp.Void] that handles sleeping with replay support.
 // In replay mode, this method returns immediately without actual waiting, which speeds up test execution.
 // In record mode, this method performs the actual sleep operation using chromedp.Sleep.
-func (chromeSession *ChromeSession) Sleep(duration time.Duration) chromedp.Action[chromedp.Void] {
+func (chromeSession *Session) Sleep(duration time.Duration) chromedp.Action[chromedp.Void] {
 	return chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
 		if chromeSession.NotUseNetwork {
 			// Replay mode: don't wait real time, just log
-			chromeSession.Printf("%s REPLAY SLEEP: skipping %v\n", chromeSession.getDebugPrefix(), duration)
+			chromeSession.Printf("%s REPLAY SLEEP: skipping %v\n", chromeSession.DebugPrefix(), duration)
 			return nil
 		} else {
 			// Record mode: perform actual sleep
-			chromeSession.Printf("%s SLEEP: %v\n", chromeSession.getDebugPrefix(), duration)
+			chromeSession.Printf("%s SLEEP: %v\n", chromeSession.DebugPrefix(), duration)
 			return chromedp.Do(ctx, chromedp.Sleep(duration))
 		}
 	})
 }
 
 // DoNavigate implements UnifiedScraper.Navigate
-func (chromeSession *ChromeSession) DoNavigate(url string) error {
+func (chromeSession *Session) DoNavigate(url string) error {
 	return chromedp.Do(chromeSession.Ctx, chromeSession.Navigate(url))
 }
 
 // DoWaitVisible implements UnifiedScraper.WaitVisible
-func (chromeSession *ChromeSession) DoWaitVisible(selector string) error {
+func (chromeSession *Session) DoWaitVisible(selector string) error {
 	return chromedp.Do(chromeSession.Ctx, chromeSession.WaitVisible(selector))
 }
 
 // DoSendKeys implements UnifiedScraper.SendKeys
-func (chromeSession *ChromeSession) DoSendKeys(selector, value string) error {
+func (chromeSession *Session) DoSendKeys(selector, value string) error {
 	return chromedp.Do(chromeSession.Ctx, chromeSession.SendKeys(selector, value))
 }
 
 // DoClick implements UnifiedScraper.Click
-func (chromeSession *ChromeSession) DoClick(selector string) error {
+func (chromeSession *Session) DoClick(selector string) error {
 	return chromedp.Do(chromeSession.Ctx, chromeSession.Click(selector))
 }
 
 // DoSleep is a convenience method for executing Sleep action
-func (chromeSession *ChromeSession) DoSleep(duration time.Duration) error {
+func (chromeSession *Session) DoSleep(duration time.Duration) error {
 	return chromedp.Do(chromeSession.Ctx, chromeSession.Sleep(duration))
 }

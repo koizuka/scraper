@@ -24,13 +24,13 @@ func TestSaveAndLoadPageMetadata(t *testing.T) {
 	filename := filepath.Join(tempDir, "test.html")
 
 	// Test save
-	err = savePageMetadata(filename, metadata)
+	err = SavePageMetadata(filename, metadata)
 	if err != nil {
 		t.Fatalf("Failed to save metadata: %v", err)
 	}
 
 	// Test load
-	loaded, err := loadPageMetadata(filename)
+	loaded, err := LoadPageMetadata(filename)
 	if err != nil {
 		t.Fatalf("Failed to load metadata: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestSaveAndLoadPageMetadata(t *testing.T) {
 
 func TestLoadPageMetadata_Errors(t *testing.T) {
 	// Test non-existent file
-	_, err := loadPageMetadata("/non/existent/file.html")
+	_, err := LoadPageMetadata("/non/existent/file.html")
 	if err == nil {
 		t.Error("Expected error when loading non-existent file")
 	}
@@ -62,7 +62,7 @@ func TestLoadPageMetadata_Errors(t *testing.T) {
 		t.Fatalf("Failed to write invalid JSON file: %v", err)
 	}
 
-	_, err = loadPageMetadata(filename)
+	_, err = LoadPageMetadata(filename)
 	if err == nil {
 		t.Error("Expected error when loading invalid JSON")
 	}

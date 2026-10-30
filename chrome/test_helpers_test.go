@@ -1,4 +1,4 @@
-package scraper
+package chrome
 
 // Tests for test_helpers.go, plus test-only helpers. Unlike test_helpers.go,
 // helpers in this file are excluded from the public package API because it is
@@ -73,7 +73,7 @@ func setCIEnv(t *testing.T, value string) {
 	})
 }
 
-// newIsolatedTestChromeOptions creates CI-compatible Chrome options that use a
+// newIsolatedTestOptions creates CI-compatible Chrome options that use a
 // per-test user data directory instead of the shared ./chromeUserData.
 // Consecutive tests sharing one profile directory can make Chrome instances
 // interfere with each other (profile SingletonLock contention, leftover
@@ -84,9 +84,9 @@ func setCIEnv(t *testing.T, value string) {
 // separate process the allocator does not wait for) can briefly keep e.g.
 // CrashpadMetrics-active.pma open after the browser exits. Cleanup is
 // best-effort instead.
-func newIsolatedTestChromeOptions(t *testing.T, headless bool, timeout time.Duration) NewChromeOptions {
+func newIsolatedTestOptions(t *testing.T, headless bool, timeout time.Duration) Options {
 	t.Helper()
-	options := NewTestChromeOptionsWithTimeout(headless, timeout)
+	options := NewTestOptionsWithTimeout(headless, timeout)
 	dir, err := os.MkdirTemp("", "chromeUserData-*")
 	if err != nil {
 		t.Fatal(err)

@@ -1,4 +1,4 @@
-package scraper
+package chrome
 
 import (
 	"testing"
@@ -104,4 +104,25 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// TestXPathEscaping tests XPath injection prevention
+func TestXPathEscaping(t *testing.T) {
+	// Test the new proper XPath escaping function
+	text := "Test's link"
+	escapedText := escapeXPathText(text)
+	expected := "\"Test's link\""
+
+	if escapedText != expected {
+		t.Errorf("XPath escaping failed: got %q, want %q", escapedText, expected)
+	}
+
+	// Test complex case with both quote types
+	complexText := "Test's \"complex\" link"
+	complexEscaped := escapeXPathText(complexText)
+	expectedComplex := "concat('Test', \"'\", 's \"complex\" link')"
+
+	if complexEscaped != expectedComplex {
+		t.Errorf("Complex XPath escaping failed: got %q, want %q", complexEscaped, expectedComplex)
+	}
 }

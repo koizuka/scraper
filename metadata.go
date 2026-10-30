@@ -15,8 +15,8 @@ type PageMetadata struct {
 	Title       string `json:"title,omitempty"`
 }
 
-// savePageMetadata saves metadata to a .meta file
-func savePageMetadata(filename string, metadata PageMetadata) error {
+// SavePageMetadata saves metadata to a .meta file
+func SavePageMetadata(filename string, metadata PageMetadata) error {
 	metadataFilename := filename + MetadataFileExtension
 	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
@@ -29,8 +29,8 @@ func savePageMetadata(filename string, metadata PageMetadata) error {
 	return nil
 }
 
-// loadPageMetadata loads metadata from a .meta file
-func loadPageMetadata(filename string) (PageMetadata, error) {
+// LoadPageMetadata loads metadata from a .meta file
+func LoadPageMetadata(filename string) (PageMetadata, error) {
 	var metadata PageMetadata
 	metadataFilename := filename + MetadataFileExtension
 	metadataBytes, err := os.ReadFile(metadataFilename)

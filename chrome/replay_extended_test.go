@@ -1,9 +1,10 @@
-package scraper
+package chrome
 
 import (
 	"context"
 	"errors"
 	"github.com/chromedp/chromedp"
+	"github.com/koizuka/scraper"
 	"os"
 	"path"
 	"testing"
@@ -24,20 +25,20 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Create the expected saved file
-		session.invokeCount = 1
-		expectedFile := session.getHtmlFilename()
+		session.InvokeCount = 1
+		expectedFile := session.HtmlFilename()
 		expectedFile = expectedFile[:len(expectedFile)-5] + ".txt" // Change extension to .txt
 		err = os.WriteFile(expectedFile, []byte("test content"), 0644)
 		if err != nil {
@@ -45,7 +46,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		}
 
 		// Reset counter for test
-		session.invokeCount = 0
+		session.InvokeCount = 0
 
 		// Test SaveFile in replay mode
 		sourceFile := path.Join(dir, "source.txt")
@@ -76,22 +77,22 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		t.Cleanup(func() { os.RemoveAll(dir) })
 
 		sessionName := "chrome_retry_error_test"
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Test SaveHtml with missing file
 		action := chromeSession.SaveHtml(nil)
 		err = chromedp.Do(chromeSession.Ctx, action)
 
-		var retryErr RetryAndRecordError
+		var retryErr scraper.RetryAndRecordError
 		if err == nil {
 			t.Errorf("Expected RetryAndRecordError, got nil")
 			return
@@ -115,21 +116,21 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Create multiple mock HTML files
 		for i := 1; i <= 3; i++ {
-			session.invokeCount = i
-			htmlFile := session.getHtmlFilename()
+			session.InvokeCount = i
+			htmlFile := session.HtmlFilename()
 			mockHTML := `<html><body>Mock HTML ` + string(rune('0'+i)) + `</body></html>`
 			err = os.WriteFile(htmlFile, []byte(mockHTML), 0644)
 			if err != nil {
@@ -138,7 +139,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		}
 
 		// Reset counter
-		session.invokeCount = 0
+		session.InvokeCount = 0
 
 		// Call SaveHtml multiple times and verify counter increments
 		for i := 1; i <= 3; i++ {
@@ -149,8 +150,8 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 				return
 			}
 
-			if session.invokeCount != i {
-				t.Errorf("Expected invokeCount %d, got %d", i, session.invokeCount)
+			if session.InvokeCount != i {
+				t.Errorf("Expected InvokeCount %d, got %d", i, session.InvokeCount)
 				return
 			}
 		}
@@ -169,21 +170,21 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Create mock HTML files for each operation
 		for i := 1; i <= 4; i++ {
-			session.invokeCount = i
-			htmlFile := session.getHtmlFilename()
+			session.InvokeCount = i
+			htmlFile := session.HtmlFilename()
 			// Include elements that tests will look for
 			mockHTML := `<html><body>
 				<div id="test">Test Element</div>
@@ -198,7 +199,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		}
 
 		// Reset counter
-		session.invokeCount = 0
+		session.InvokeCount = 0
 
 		// Test unified interface methods in replay mode
 		operations := []struct {
@@ -219,8 +220,8 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			}
 
 			expectedCount := i + 1
-			if session.invokeCount != expectedCount {
-				t.Errorf("After %s: expected invokeCount %d, got %d", test.name, expectedCount, session.invokeCount)
+			if session.InvokeCount != expectedCount {
+				t.Errorf("After %s: expected InvokeCount %d, got %d", test.name, expectedCount, session.InvokeCount)
 				return
 			}
 		}
@@ -239,21 +240,21 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Create mock HTML files
 		for i := 1; i <= 2; i++ {
-			session.invokeCount = i
-			htmlFile := session.getHtmlFilename()
+			session.InvokeCount = i
+			htmlFile := session.HtmlFilename()
 			mockHTML := `<html><body>Mock HTML for form/anchor operation ` + string(rune('0'+i)) + `</body></html>`
 			err = os.WriteFile(htmlFile, []byte(mockHTML), 0644)
 			if err != nil {
@@ -262,7 +263,7 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		}
 
 		// Reset counter
-		session.invokeCount = 0
+		session.InvokeCount = 0
 
 		// Test SubmitForm in replay mode
 		err = chromeSession.SubmitForm("#form", map[string]string{"input": "value"})
@@ -271,8 +272,8 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			return
 		}
 
-		if session.invokeCount != 1 {
-			t.Errorf("Expected invokeCount 1 after SubmitForm, got %d", session.invokeCount)
+		if session.InvokeCount != 1 {
+			t.Errorf("Expected InvokeCount 1 after SubmitForm, got %d", session.InvokeCount)
 			return
 		}
 
@@ -283,8 +284,8 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			return
 		}
 
-		if session.invokeCount != 2 {
-			t.Errorf("Expected invokeCount 2 after FollowAnchor, got %d", session.invokeCount)
+		if session.InvokeCount != 2 {
+			t.Errorf("Expected InvokeCount 2 after FollowAnchor, got %d", session.InvokeCount)
 			return
 		}
 	})
@@ -319,12 +320,12 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			}
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession := &ChromeSession{
+		chromeSession := &Session{
 			Session:      session,
 			DownloadPath: chromeDir,
 		}
@@ -358,15 +359,15 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Create a cancelled context
@@ -374,15 +375,15 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 		cancel() // Immediately cancel
 
 		// Create mock HTML file
-		session.invokeCount = 1
-		htmlFile := session.getHtmlFilename()
+		session.InvokeCount = 1
+		htmlFile := session.HtmlFilename()
 		err = os.WriteFile(htmlFile, []byte("<html><body>test</body></html>"), 0644)
 		if err != nil {
 			t.Error(err)
 		}
 
 		// Reset counter
-		session.invokeCount = 0
+		session.InvokeCount = 0
 
 		// SaveHtml should work in replay mode even with cancelled context
 		// because it doesn't perform browser operations
@@ -393,8 +394,8 @@ func TestChromeSession_ReplayExtended(t *testing.T) {
 			return
 		}
 
-		if session.invokeCount != 1 {
-			t.Errorf("Expected invokeCount 1, got %d", session.invokeCount)
+		if session.InvokeCount != 1 {
+			t.Errorf("Expected InvokeCount 1, got %d", session.InvokeCount)
 			return
 		}
 	})

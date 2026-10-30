@@ -1,7 +1,8 @@
-package scraper
+package chrome
 
 import (
 	"github.com/chromedp/chromedp"
+	"github.com/koizuka/scraper"
 	"os"
 	"path"
 	"strings"
@@ -23,12 +24,12 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
+		logger := scraper.BufferedLogger{}
 
 		// Create a mock HTML file first
-		session := NewSession(sessionName, &logger)
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
-		htmlFile := session.getHtmlFilename()
+		htmlFile := session.HtmlFilename()
 
 		// Write a mock HTML file
 		mockHTML := "<html><body>Mock HTML for replay test</body></html>"
@@ -40,13 +41,13 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 
 		// Test replay mode
 		session.NotUseNetwork = true
-		session.invokeCount = 0 // Reset counter
+		session.InvokeCount = 0 // Reset counter
 
 		// Since we're not running actual Chrome, we can't call chromedp.Do
 		// Instead, test the logic directly
 		if session.NotUseNetwork {
 			// This should try to read from the file we created
-			body, err := os.ReadFile(session.getHtmlFilename())
+			body, err := os.ReadFile(session.HtmlFilename())
 			if err != nil {
 				t.Errorf("SaveHtml in replay mode should read existing file: %v", err)
 				return
@@ -60,14 +61,14 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 	})
 
 	t.Run("Sleep replay mode", func(t *testing.T) {
-		logger := BufferedLogger{}
-		session := NewSession("test", &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession("test", &logger)
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		start := time.Now()
@@ -113,15 +114,15 @@ func TestChromeSession_ReplaySimple(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 		session.NotUseNetwork = true // Enable replay mode
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		var filename string

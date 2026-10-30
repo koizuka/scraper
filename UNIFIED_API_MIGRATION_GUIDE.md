@@ -9,6 +9,7 @@
 3. [メソッド対応表](#メソッド対応表)
 4. [実践的な移行例](#実践的な移行例)
 5. [注意点とベストプラクティス](#注意点とベストプラクティス)
+6. [chrome モジュールへの分離（破壊的変更）](#chrome-モジュールへの分離破壊的変更)
 
 ## 移行の利点
 
@@ -32,7 +33,7 @@
 
 ```go
 func scrapeWithChrome(session *scraper.Session) error {
-    chromeSession, cancel, err := session.NewChrome()
+    chromeSession, cancel, err := chrome.New(session, chrome.Options{})
     if err != nil {
         return err
     }
@@ -90,7 +91,7 @@ func main() {
     session := scraper.NewSession("test", logger)
     
     // 常にChrome使用
-    chromeSession, cancel, err := session.NewChrome()
+    chromeSession, cancel, err := chrome.New(session, chrome.Options{})
     if err != nil {
         log.Fatal(err)
     }
@@ -114,7 +115,7 @@ func main() {
     var cancel context.CancelFunc
     
     if *useChrome {
-        chromeSession, c, err := session.NewChrome()
+        chromeSession, c, err := chrome.New(session, chrome.Options{})
         if err != nil {
             log.Fatal(err)
         }
@@ -160,7 +161,7 @@ func main() {
 
 ```go
 func getSbiSecurityChrome(param ParamRegistry, service StatementReceiver, session *scraper.Session) error {
-    chromeSession, cancel, err := session.NewChrome()
+    chromeSession, cancel, err := chrome.New(session, chrome.Options{})
     if err != nil {
         return err
     }
@@ -250,11 +251,11 @@ type ScraperConfig struct {
 
 func createScraper(config ScraperConfig, session *scraper.Session) (scraper.UnifiedScraper, context.CancelFunc, error) {
     if config.UseChrome {
-        options := scraper.NewChromeOptions{
+        options := chrome.Options{
             Headless: config.Headless,
             Timeout:  config.Timeout,
         }
-        chromeSession, cancel, err := session.NewChromeOpt(options)
+        chromeSession, cancel, err := chrome.New(session, options)
         if err != nil {
             return nil, nil, err
         }
@@ -324,7 +325,7 @@ scraper.WaitVisible("selector") // タイムアウトは実装依存
 err := scraper.DoClick("selector")
 if err != nil {
     // Chrome固有のエラー情報が必要な場合は型アサーションを使用
-    if chromeSession, ok := scraper.(*scraper.ChromeSession); ok {
+    if chromeSession, ok := scraper.(*chrome.Session); ok {
         // Chrome固有の処理
     }
 }
@@ -360,7 +361,7 @@ type Config struct {
 func createScraperFromConfig(config Config, session *scraper.Session) scraper.UnifiedScraper {
     switch config.ScrapingMode {
     case "chrome":
-        chromeSession, _, _ := session.NewChromeOpt(scraper.NewChromeOptions{
+        chromeSession, _, _ := chrome.New(session, chrome.Options{
             Headless: config.Chrome.Headless,
             Timeout:  config.Chrome.Timeout,
         })
@@ -406,7 +407,7 @@ func advancedDownload(scraperInstance scraper.UnifiedScraper) error {
     filename, err := scraperInstance.DownloadResource(options)
     if err != nil {
         // 失敗した場合は型固有の機能を使用
-        if chromeSession, ok := scraperInstance.(*scraper.ChromeSession); ok {
+        if chromeSession, ok := scraperInstance.(*chrome.Session); ok {
             return chromedp.Do(chromeSession.Ctx,
                 chromeSession.DownloadFile(&filename, chromeOptions,
                     chromedp.Click(chromedp.CSS(".download-button")),
@@ -419,6 +420,33 @@ func advancedDownload(scraperInstance scraper.UnifiedScraper) error {
 }
 ```
 
+## chrome モジュールへの分離（破壊的変更）
+
+Chrome 自動化機能は別モジュール `github.com/koizuka/scraper/chrome` に分離しました。
+本体 `github.com/koizuka/scraper` は chromedp に依存しなくなったため、Chrome を使わないプログラムは chromedp の更新の影響を受けません。
+
+Chrome を使う場合は次のように移行してください。
+
+```sh
+go get github.com/koizuka/scraper@latest github.com/koizuka/scraper/chrome@latest
+```
+
+| 旧 (`scraper`) | 新 (`chrome`) |
+|---|---|
+| `session.NewChrome()` | `chrome.New(session, chrome.Options{})` |
+| `session.NewChromeOpt(opts)` | `chrome.New(session, opts)` |
+| `scraper.NewChromeOptions` | `chrome.Options` |
+| `*scraper.ChromeSession` | `*chrome.Session` |
+| `scraper.ChromeUnmarshal` | `chrome.Unmarshal` |
+| `scraper.DownloadFileOptions` | `chrome.DownloadFileOptions` |
+| `scraper.DownloadedFileNameNotSatisfiedError` | `chrome.DownloadedFileNameNotSatisfiedError` |
+| `scraper.NewChromeWithRetry` | `chrome.NewWithRetry` |
+| `scraper.NewTestChromeOptions` / `NewTestChromeOptionsWithTimeout` / `NewTestChromeContext` | `chrome.NewTestOptions` / `NewTestOptionsWithTimeout` / `NewTestContext` |
+| `scraper.DefaultFilePermission` / `DefaultDirPermission` / `DefaultBlankURL` | `chrome.DefaultFilePermission` / `DefaultDirPermission` / `DefaultBlankURL` |
+
+`chrome.Session` は `*scraper.Session` を埋め込んでいるため、`chromeSession.Session` や `Printf` などのメソッドはこれまでどおり使えます。
+`scraper.ChromeTimeoutError` は chromedp に依存しないため本体に残っています。
+
 ## chromedp v0.19 への移行（破壊的変更）
 
 Go 1.27 以上が必要です。chromedp v0.19.1 / cdproto v0.157.4 への更新に伴い、Chrome アクションを直接組み合わせる利用コードも修正してください。
@@ -426,17 +454,17 @@ Go 1.27 以上が必要です。chromedp v0.19.1 / cdproto v0.157.4 への更新
 - `SaveHtml`、`SaveFile`、`DownloadFile`、`Navigate`、`WaitVisible`、`SendKeys`、`Click`、`Sleep` の戻り値は `chromedp.Action[chromedp.Void]` です。`DownloadFile` の可変長引数も同じ型です。
 - 複数のアクションは `chromedp.Do(ctx, actions...)` で実行します。旧 `action.Do(ctx)` や `action(ctx)` も `chromedp.Do(ctx, action)` に置き換えてください。
 - 値を取得するときは `title, err := chromedp.Run(ctx, chromedp.Title())` のように戻り値を受け取ります。
-- 標準 chromedp の CSS セレクターは `chromedp.CSS("#id")` を指定します。ChromeSession の `WaitVisible`・`SendKeys`・`Click` は引き続き CSS 文字列を受け取ります。
+- 標準 chromedp の CSS セレクターは `chromedp.CSS("#id")` を指定します。chrome.Session の `WaitVisible`・`SendKeys`・`Click` は引き続き CSS 文字列を受け取ります。
 - 独自アクションは `chromedp.Func(func(ctx context.Context, target *chromedp.Target) error { ... })` で作成します。
 - `UnifiedScraper` の `DoNavigate` など、エラーを直接返すメソッドの呼び出し方は同じです。
 
-Chrome の接続は chromedp の標準である pipe を使用します。`NewChromeOptions.Headless: false` は `VisibleWindow` に対応させ、ウィンドウを表示する動作を維持しています。
+Chrome の接続は chromedp の標準である pipe を使用します。`chrome.Options.Headless: false` は `VisibleWindow` に対応させ、ウィンドウを表示する動作を維持しています。
 
 詳細は [chromedp の移行ガイド](https://github.com/chromedp/chromedp/blob/v0.19.1/docs/MIGRATION.md) を参照してください。
 
 ## Chrome アクションの組み合わせ
 
-ChromeSession のアクションメソッドは `chromedp.Action[chromedp.Void]` を返します。`chromedp.Do` で複数のアクションを順に実行できます。
+chrome.Session のアクションメソッドは `chromedp.Action[chromedp.Void]` を返します。`chromedp.Do` で複数のアクションを順に実行できます。
 
 ### アクションの連続実行
 

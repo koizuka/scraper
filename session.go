@@ -29,12 +29,12 @@ type Session struct {
 	Encoding           encoding.Encoding // force charset over Content-Type response header
 	UserAgent          string            // specify User-Agent
 	FilePrefix         string            // prefix to directory of session files
-	invokeCount        int
-	NotUseNetwork      bool // load from previously downloaded session files rather than network access
-	SaveToFile         bool // save downloaded pages to session directory
-	ShowRequestHeader  bool // print request headers with Logger
-	ShowResponseHeader bool // print response headers with Logger
-	ShowFormPosting    bool // print posting form data, with Logger
+	InvokeCount        int               // sequence number of saved files; used to name '<n>.html' in the session directory
+	NotUseNetwork      bool              // load from previously downloaded session files rather than network access
+	SaveToFile         bool              // save downloaded pages to session directory
+	ShowRequestHeader  bool              // print request headers with Logger
+	ShowResponseHeader bool              // print response headers with Logger
+	ShowFormPosting    bool              // print posting form data, with Logger
 	Log                Logger
 	jar                *cookiejar.Jar
 	BodyFilter         func(resp *Response, body []byte) ([]byte, error)
@@ -123,8 +123,8 @@ func (session *Session) ClearDebugStep() {
 	session.debugStep = ""
 }
 
-// getDebugPrefix returns the debug prefix for logging
-func (session *Session) getDebugPrefix() string {
+// DebugPrefix returns the debug prefix for logging
+func (session *Session) DebugPrefix() string {
 	if session.debugStep == "" {
 		return "****"
 	}
@@ -140,8 +140,9 @@ func (session *Session) GetDirectory() string {
 	return session.getDirectory()
 }
 
-func (session *Session) getHtmlFilename() string {
-	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.invokeCount))
+// HtmlFilename returns the path of the HTML file for the current InvokeCount
+func (session *Session) HtmlFilename() string {
+	return path.Join(session.getDirectory(), fmt.Sprintf("%v.html", session.InvokeCount))
 }
 
 func (session *Session) invoke(req *http.Request) (*Response, error) {
@@ -157,8 +158,8 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		}
 	}
 
-	session.invokeCount++
-	filename := session.getHtmlFilename()
+	session.InvokeCount++
+	filename := session.HtmlFilename()
 
 	if session.ShowRequestHeader {
 		session.Printf("REQUEST: %v %v:\n", req.Method, req.URL.String())
@@ -214,7 +215,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 
 		if session.SaveToFile {
 			// save to file
-			session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
+			session.Printf("%s SAVE to %v (%v bytes)\n", session.DebugPrefix(), filename, len(body))
 			err = os.WriteFile(filename, body, os.FileMode(0644))
 			if err != nil {
 				return nil, err
@@ -225,14 +226,14 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 				URL:         req.URL.String(),
 				ContentType: contentType,
 			}
-			err = savePageMetadata(filename, metadata)
+			err = SavePageMetadata(filename, metadata)
 			if err != nil {
 				return nil, err
 			}
 		}
 	} else {
 		// load from file
-		session.Printf("%s LOAD from %v\n", session.getDebugPrefix(), filename)
+		session.Printf("%s LOAD from %v\n", session.DebugPrefix(), filename)
 		var err error
 		body, err = os.ReadFile(filename)
 		if err != nil {
@@ -240,7 +241,7 @@ func (session *Session) invoke(req *http.Request) (*Response, error) {
 		}
 
 		// Load metadata from unified file
-		metadata, err := loadPageMetadata(filename)
+		metadata, err := LoadPageMetadata(filename)
 		if err != nil {
 			return nil, RetryAndRecordError{filename}
 		}
@@ -623,8 +624,8 @@ func (session *Session) SavePage() (string, error) {
 		}
 	}
 
-	session.invokeCount++
-	filename := session.getHtmlFilename()
+	session.InvokeCount++
+	filename := session.HtmlFilename()
 
 	html, err := session.currentPage.Html()
 	if err != nil {
@@ -637,7 +638,7 @@ func (session *Session) SavePage() (string, error) {
 		return "", err
 	}
 
-	session.Printf("%s SAVE to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
+	session.Printf("%s SAVE to %v (%v bytes)\n", session.DebugPrefix(), filename, len(body))
 	return filename, nil
 }
 
@@ -661,8 +662,8 @@ func (session *Session) DownloadResource(options UnifiedDownloadOptions) (string
 
 	// For HTTP downloads, we can try to save the current response if it's a file
 	// This is a basic implementation - more complex scenarios should use direct HTTP methods
-	session.invokeCount++
-	filename := session.getHtmlFilename()
+	session.InvokeCount++
+	filename := session.HtmlFilename()
 
 	// Change extension based on content type or SaveAs option
 	if options.SaveAs != "" {
@@ -681,7 +682,7 @@ func (session *Session) DownloadResource(options UnifiedDownloadOptions) (string
 		return "", fmt.Errorf("session: failed to save downloaded content: %w", err)
 	}
 
-	session.Printf("%s DOWNLOAD saved to %v (%v bytes)\n", session.getDebugPrefix(), filename, len(body))
+	session.Printf("%s DOWNLOAD saved to %v (%v bytes)\n", session.DebugPrefix(), filename, len(body))
 	return filename, nil
 }
 

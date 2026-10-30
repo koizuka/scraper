@@ -1,11 +1,11 @@
-# Unmarshal / ChromeUnmarshal リファレンスドキュメント
+# Unmarshal / chrome.Unmarshal リファレンスドキュメント
 
 ## 概要
 
 このライブラリは、HTMLページからGoの構造体にデータを抽出するための2つの関数を提供します：
 
 - `Unmarshal` - goqueryを使用したDOM操作ベースの抽出
-- `ChromeUnmarshal` - Chrome DevTools Protocolを使用したブラウザベースの抽出
+- `chrome.Unmarshal` - Chrome DevTools Protocolを使用したブラウザベースの抽出
 
 ## Unmarshal 関数
 
@@ -36,12 +36,12 @@ var article Article
 err := scraper.Unmarshal(&article, page.Find(".article"), scraper.UnmarshalOption{})
 ```
 
-## ChromeUnmarshal 関数
+## chrome.Unmarshal 関数
 
 ### 関数シグネチャ
 
 ```go
-func ChromeUnmarshal(ctx context.Context, v interface{}, cssSelector string, opt UnmarshalOption) error
+func Unmarshal(ctx context.Context, v interface{}, cssSelector string, opt scraper.UnmarshalOption) error
 ```
 
 ### パラメータ
@@ -207,9 +207,9 @@ ExtractNumber("$12.34 USD")   // 12.34
 
 数値のパースに失敗した場合
 
-## Unmarshal vs ChromeUnmarshal の違い
+## Unmarshal vs chrome.Unmarshal の違い
 
-| 機能 | Unmarshal | ChromeUnmarshal |
+| 機能 | Unmarshal | chrome.Unmarshal |
 |------|-----------|-----------------|
 | 実行環境 | goquery (静的HTML) | Chrome DevTools Protocol |
 | パフォーマンス | 高速 | 低速（ブラウザ操作） |
@@ -242,7 +242,7 @@ type Tag struct {
 }
 ```
 
-### ChromeUnmarshalでの動的コンテンツ
+### chrome.Unmarshalでの動的コンテンツ
 
 ```go
 // JavaScriptで生成された要素も取得可能
@@ -292,7 +292,7 @@ func (p *Price) Unmarshal(s string) error {
 
 1. **適切な関数選択**
    - 静的HTMLの場合は`Unmarshal`を使用
-   - JavaScript必須の場合は`ChromeUnmarshal`を使用
+   - JavaScript必須の場合は`chrome.Unmarshal`を使用
 
 2. **エラーハンドリング**
    - フィールド固有のエラーは`UnmarshalFieldError`で詳細確認
@@ -300,7 +300,7 @@ func (p *Price) Unmarshal(s string) error {
 
 3. **パフォーマンス**
    - 大量データ処理には`Unmarshal`を優先
-   - `ChromeUnmarshal`は必要最小限に留める
+   - `chrome.Unmarshal`は必要最小限に留める
 
 4. **デバッグ**
    - 正規表現は単純に保つ

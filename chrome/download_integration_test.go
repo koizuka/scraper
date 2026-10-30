@@ -1,11 +1,12 @@
 //go:build integration
 
-package scraper
+package chrome
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/koizuka/scraper"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,12 +31,12 @@ func TestChromeSession_DownloadFile_PopupAfterFailedTrigger(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	session := NewSession("popup", &BufferedLogger{})
+	session := scraper.NewSession("popup", &scraper.BufferedLogger{})
 	session.FilePrefix = t.TempDir() + string(os.PathSeparator)
-	if err := os.MkdirAll(session.getDirectory(), 0755); err != nil {
+	if err := os.MkdirAll(session.GetDirectory(), 0755); err != nil {
 		t.Fatal(err)
 	}
-	chrome, cancel, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+	chrome, cancel, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 	defer cancel()
 	if err != nil {
 		t.Fatal(err)

@@ -57,11 +57,29 @@ Go 1.27 以上が必要です。Chrome API の更新については [移行ガ�
 
 ```
 
+## Chrome による自動化
+
+Chrome/Chromium を使う機能は別モジュール `github.com/koizuka/scraper/chrome` にあります。
+本体は chromedp に依存しないので、Chrome を使わない場合は本体だけを import してください。
+
+```go
+import "github.com/koizuka/scraper/chrome"
+
+ chromeSession, cancel, err := chrome.New(session, chrome.Options{Headless: true})
+ if err != nil {
+  log.Fatal(err)
+ }
+ defer cancel()
+ resp, err := chromeSession.RunNavigate("https://example.com")
+```
+
+旧 API (`session.NewChrome()` など) からの移行は [移行ガイド](UNIFIED_API_MIGRATION_GUIDE.md#chrome-モジュールへの分離破壊的変更) を参照してください。
+
 ## ドキュメント
 
 詳細なリファレンスについては以下のドキュメントを参照してください：
 
-- **[Unmarshal/ChromeUnmarshalリファレンス](UNMARSHAL_REFERENCE.md)** - HTMLからGoの構造体への高度なデータ抽出機能の詳細な使用方法
+- **[Unmarshal/chrome.Unmarshalリファレンス](UNMARSHAL_REFERENCE.md)** - HTMLからGoの構造体への高度なデータ抽出機能の詳細な使用方法
 
 ## メモ
 

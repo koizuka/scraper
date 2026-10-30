@@ -69,14 +69,16 @@ const (
 	ChromeScraper
 )
 
+// ScraperTyper is implemented by scrapers that report their own ScraperType
+// (e.g. the Chrome session in the github.com/koizuka/scraper/chrome module).
+type ScraperTyper interface {
+	ScraperType() ScraperType
+}
+
 // GetScraperType returns the type of scraper being used
 func GetScraperType(scraper UnifiedScraper) ScraperType {
-	switch scraper.(type) {
-	case *Session:
-		return HTTPScraper
-	case *ChromeSession:
-		return ChromeScraper
-	default:
-		return HTTPScraper
+	if typer, ok := scraper.(ScraperTyper); ok {
+		return typer.ScraperType()
 	}
+	return HTTPScraper
 }

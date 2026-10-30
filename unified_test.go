@@ -81,27 +81,6 @@ func TestUnifiedInterface(t *testing.T) {
 			},
 			cleanup: func() {},
 		},
-		// Note: Chrome scraper tests would require actual Chrome installation
-		// Uncomment the following when Chrome tests are needed
-		/*
-			{
-				name: "Chrome Scraper",
-				scraper: func(t *testing.T) UnifiedScraper {
-					var logger ConsoleLogger
-					session := NewSession("test-chrome", logger)
-					chromeSession, cancel, err := NewChromeWithRetry(session, NewChromeOptions{
-						Headless: true,
-						Timeout:  30 * time.Second,
-					}, 2)
-					if err != nil {
-						t.Skipf("Chrome not available: %v", err)
-					}
-					t.Cleanup(cancel)
-					return chromeSession
-				},
-				cleanup: func() {},
-			},
-		*/
 	}
 
 	for _, tc := range testCases {
@@ -346,27 +325,6 @@ func TestScraperTypeDetection(t *testing.T) {
 
 	// Test Chrome scraper type detection would require Chrome setup
 	// This is left as a placeholder for when Chrome tests are enabled
-}
-
-// TestXPathEscaping tests XPath injection prevention
-func TestXPathEscaping(t *testing.T) {
-	// Test the new proper XPath escaping function
-	text := "Test's link"
-	escapedText := escapeXPathText(text)
-	expected := "\"Test's link\""
-
-	if escapedText != expected {
-		t.Errorf("XPath escaping failed: got %q, want %q", escapedText, expected)
-	}
-
-	// Test complex case with both quote types
-	complexText := "Test's \"complex\" link"
-	complexEscaped := escapeXPathText(complexText)
-	expectedComplex := "concat('Test', \"'\", 's \"complex\" link')"
-
-	if complexEscaped != expectedComplex {
-		t.Errorf("Complex XPath escaping failed: got %q, want %q", complexEscaped, expectedComplex)
-	}
 }
 
 // Helper function for formatting in concurrent tests

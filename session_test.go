@@ -34,12 +34,12 @@ func TestSession_DebugStep(t *testing.T) {
 		}
 	})
 
-	t.Run("getDebugPrefix", func(t *testing.T) {
+	t.Run("DebugPrefix", func(t *testing.T) {
 		logger := &BufferedLogger{}
 		session := NewSession("test_session", logger)
 
 		// Test without debug step
-		prefix := session.getDebugPrefix()
+		prefix := session.DebugPrefix()
 		expected := "****"
 		if prefix != expected {
 			t.Errorf("Expected prefix %q, got %q", expected, prefix)
@@ -48,7 +48,7 @@ func TestSession_DebugStep(t *testing.T) {
 		// Test with debug step
 		testStep := "ログイン処理"
 		session.SetDebugStep(testStep)
-		prefix = session.getDebugPrefix()
+		prefix = session.DebugPrefix()
 		expected = fmt.Sprintf("**** [%s]", testStep)
 		if prefix != expected {
 			t.Errorf("Expected prefix %q, got %q", expected, prefix)
@@ -138,7 +138,7 @@ func TestSession_DebugStep(t *testing.T) {
 			URL:         "http://example.com",
 			ContentType: "text/html",
 		}
-		err = savePageMetadata(testFile, metadata)
+		err = SavePageMetadata(testFile, metadata)
 		if err != nil {
 			t.Fatal(err)
 		}

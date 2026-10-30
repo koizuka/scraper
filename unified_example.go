@@ -1,7 +1,6 @@
 package scraper
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -19,18 +18,7 @@ func ExampleUnifiedScraping() {
 		log.Printf("HTTP scraping error: %v", err)
 	}
 
-	// Example 2: Using Chrome-based scraping with unified interface
-	fmt.Println("\n=== Chrome-based Scraping ===")
-	chromeSession, cancel, err := session.NewChrome()
-	if err != nil {
-		log.Printf("Chrome setup error: %v", err)
-		return
-	}
-	defer cancel()
-
-	if err := demonstrateUnifiedAPI(chromeSession); err != nil {
-		log.Printf("Chrome scraping error: %v", err)
-	}
+	// For Chrome-based scraping, see the github.com/koizuka/scraper/chrome module.
 }
 
 // demonstrateUnifiedAPI shows how the same code works with both scraper types
@@ -73,36 +61,6 @@ func demonstrateUnifiedAPI(scraper UnifiedScraper) error {
 	scraper.Printf("Found %d links", len(data.Links))
 
 	return nil
-}
-
-// ExampleSwitchableScraper demonstrates how to easily switch between scraper types
-// based on configuration or runtime conditions.
-func ExampleSwitchableScraper(useChrome bool) {
-	var logger ConsoleLogger
-	session := NewSession("switchable-session", logger)
-
-	var scraper UnifiedScraper
-	var cancel context.CancelFunc
-
-	if useChrome {
-		chromeSession, c, err := session.NewChrome()
-		if err != nil {
-			log.Printf("Chrome setup failed: %v", err)
-			return
-		}
-		scraper = chromeSession
-		cancel = c
-		defer cancel()
-		log.Println("Using Chrome scraper")
-	} else {
-		scraper = session
-		log.Println("Using HTTP scraper")
-	}
-
-	// Same code works for both scraper types
-	if err := demonstrateUnifiedAPI(scraper); err != nil {
-		log.Printf("Scraping failed: %v", err)
-	}
 }
 
 // ExampleFormAutomation shows unified form handling

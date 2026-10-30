@@ -21,7 +21,10 @@ This is a Go web scraping library that provides a comprehensive toolkit for web 
    - Handles relative URL resolution and meta refresh redirects
    - Provides CSS selector-based element finding
 
-3. **ChromeSession** (`chrome.go`) - Browser automation layer
+3. **chrome.Session** (`chrome/chrome.go`) - Browser automation layer
+   - Lives in the separate module `github.com/koizuka/scraper/chrome` (`chrome/go.mod`) so the root module does not depend on chromedp
+   - Never import chromedp/cdproto from the root package; Chrome-specific code goes under `chrome/`
+   - `chrome/go.mod` uses `replace github.com/koizuka/scraper => ../`; bump its `require` version when chrome needs new root APIs
    - Extends Session with Chrome DevTools Protocol capabilities via `github.com/chromedp/chromedp`
    - Manages Chrome user data directory and download handling
    - Provides file download with glob pattern matching
@@ -58,8 +61,8 @@ This is a Go web scraping library that provides a comprehensive toolkit for web 
 ## Common Development Commands
 
 ```bash
-# Run tests
-go test ./...
+# Run tests (root module and chrome module)
+go test ./... && (cd chrome && go test ./...)
 
 # Run specific test
 go test -run TestFunctionName
@@ -78,7 +81,7 @@ go test -v ./...
 
 Tests are located in `*_test.go` files. Key test files:
 
-- `chrome_test.go` - Chrome automation tests
+- `chrome/chrome_test.go` - Chrome automation tests (run `go test ./...` inside `chrome/` too; it is a separate module)
 - `form_test.go` - Form handling tests
 - `response_test.go` - Response processing tests
 - `unmarshal_test.go` - Data extraction tests
@@ -97,7 +100,7 @@ page, err := session.GetPage("https://example.com")
 ### Chrome Automation
 
 ```go
-chromeSession, cancel, err := session.NewChrome()
+chromeSession, cancel, err := chrome.New(session, chrome.Options{})
 defer cancel()
 resp, err := chromeSession.RunNavigate("https://example.com")
 ```
@@ -106,7 +109,7 @@ resp, err := chromeSession.RunNavigate("https://example.com")
 
 ```go
 // Create session with per-action timeout
-chromeSession, cancel, err := session.NewChromeOpt(scraper.NewChromeOptions{
+chromeSession, cancel, err := chrome.New(session, chrome.Options{
     ActionTimeout: 5 * time.Second,
 })
 defer cancel()
@@ -132,7 +135,7 @@ err := scraper.Unmarshal(&items, page.Find(".item"), scraper.UnmarshalOption{})
 ## Dependencies
 
 - `github.com/PuerkitoBio/goquery` - HTML parsing and manipulation
-- `github.com/chromedp/chromedp` - Chrome DevTools Protocol client
+- `github.com/chromedp/chromedp` - Chrome DevTools Protocol client (`chrome` module only)
 - `github.com/orirawlings/persistent-cookiejar` - Persistent cookie storage
 - `golang.org/x/text` - Text encoding conversion
 

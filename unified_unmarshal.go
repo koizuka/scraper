@@ -13,13 +13,19 @@ func UnifiedUnmarshal(scraper UnifiedScraper, v interface{}, selector string, op
 	return scraper.ExtractData(v, selector, opt)
 }
 
+// ContextExtractor is implemented by scrapers whose data extraction depends on
+// a context (e.g. the Chrome session in the github.com/koizuka/scraper/chrome module).
+type ContextExtractor interface {
+	ExtractDataWithContext(ctx context.Context, v interface{}, selector string, opt UnmarshalOption) error
+}
+
 // UnifiedUnmarshalWithContext allows specifying a context for Chrome-based unmarshal operations.
 // For HTTP-based scraping, the context is ignored.
 func UnifiedUnmarshalWithContext(ctx context.Context, scraper UnifiedScraper, v interface{}, selector string, opt UnmarshalOption) error {
-	switch scraper.(type) {
-	case *ChromeSession:
-		// Use Chrome-specific unmarshal with context
-		return ChromeUnmarshal(ctx, v, selector, opt)
+	switch s := scraper.(type) {
+	case ContextExtractor:
+		// Use scraper-specific unmarshal with context (e.g. Chrome)
+		return s.ExtractDataWithContext(ctx, v, selector, opt)
 	case *Session:
 		// Use traditional unmarshal - context is ignored
 		return scraper.ExtractData(v, selector, opt)

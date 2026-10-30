@@ -1,9 +1,10 @@
-package scraper
+package chrome
 
 import (
 	"fmt"
 	"github.com/chromedp/chromedp"
 	"github.com/google/go-cmp/cmp"
+	"github.com/koizuka/scraper"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -64,7 +65,7 @@ func TestChromeUnmarshal(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	ctx := NewTestChromeContext(t, 30*time.Second)
+	ctx := NewTestContext(t, 30*time.Second)
 
 	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -108,7 +109,7 @@ func TestChromeUnmarshal(t *testing.T) {
 
 	var record TestRecord
 
-	err = ChromeUnmarshal(ctx, &record, "body", UnmarshalOption{})
+	err = Unmarshal(ctx, &record, "body", scraper.UnmarshalOption{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestChromeUnmarshal(t *testing.T) {
 	}
 	if !reflect.DeepEqual(record, shouldBe) {
 		diff := cmp.Diff(shouldBe, record)
-		t.Errorf("ChromeUnmarshal() (-want +got)\n%v", diff)
+		t.Errorf("Unmarshal() (-want +got)\n%v", diff)
 	}
 }
 
@@ -316,7 +317,7 @@ func (c *CustomUnmarshaller) Unmarshal(s string) error {
 	return nil
 }
 
-// ChromeUnmarshalでUnmarshallerインターフェースが正しく動作することをテストする
+// UnmarshalでUnmarshallerインターフェースが正しく動作することをテストする
 func TestChromeUnmarshalWithUnmarshaller(t *testing.T) {
 	// create a test server to serve the page
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -331,7 +332,7 @@ func TestChromeUnmarshalWithUnmarshaller(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	ctx := NewTestChromeContext(t, 30*time.Second)
+	ctx := NewTestContext(t, 30*time.Second)
 
 	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -343,7 +344,7 @@ func TestChromeUnmarshalWithUnmarshaller(t *testing.T) {
 	}
 
 	var testRecord TestRecord
-	err = ChromeUnmarshal(ctx, &testRecord, "body", UnmarshalOption{})
+	err = Unmarshal(ctx, &testRecord, "body", scraper.UnmarshalOption{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +372,7 @@ func TestChromeUnmarshalNthChildErrors(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	ctx := NewTestChromeContext(t, 30*time.Second)
+	ctx := NewTestContext(t, 30*time.Second)
 
 	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -384,7 +385,7 @@ func TestChromeUnmarshalNthChildErrors(t *testing.T) {
 	}
 
 	var testRecord TestRecord
-	err = ChromeUnmarshal(ctx, &testRecord, "body", UnmarshalOption{})
+	err = Unmarshal(ctx, &testRecord, "body", scraper.UnmarshalOption{})
 	if err == nil {
 		t.Error("Expected error for nth-child selector in slice field, but got none")
 	}
@@ -398,7 +399,7 @@ func TestChromeUnmarshalNthChildErrors(t *testing.T) {
 	}
 
 	var testRecord2 TestRecord2
-	err = ChromeUnmarshal(ctx, &testRecord2, "body", UnmarshalOption{})
+	err = Unmarshal(ctx, &testRecord2, "body", scraper.UnmarshalOption{})
 	if err == nil {
 		t.Error("Expected error for nth-last-child selector in slice field, but got none")
 	}
@@ -412,7 +413,7 @@ func TestChromeUnmarshalNthChildErrors(t *testing.T) {
 	}
 
 	var testRecord3 TestRecord3
-	err = ChromeUnmarshal(ctx, &testRecord3, "body", UnmarshalOption{})
+	err = Unmarshal(ctx, &testRecord3, "body", scraper.UnmarshalOption{})
 	if err == nil {
 		t.Error("Expected error for nth-last-of-type selector in slice field, but got none")
 	}
@@ -438,7 +439,7 @@ func TestChromeUnmarshalFirstLastChildSelectors(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	ctx := NewTestChromeContext(t, 30*time.Second)
+	ctx := NewTestContext(t, 30*time.Second)
 
 	err := chromedp.Do(ctx, chromedp.Navigate(ts.URL))
 	if err != nil {
@@ -452,7 +453,7 @@ func TestChromeUnmarshalFirstLastChildSelectors(t *testing.T) {
 	}
 
 	var testRecord TestRecord
-	err = ChromeUnmarshal(ctx, &testRecord, "body", UnmarshalOption{})
+	err = Unmarshal(ctx, &testRecord, "body", scraper.UnmarshalOption{})
 	if err != nil {
 		t.Fatal(err)
 	}

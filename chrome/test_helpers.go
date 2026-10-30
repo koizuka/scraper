@@ -1,8 +1,9 @@
-package scraper
+package chrome
 
 import (
 	"context"
 	"github.com/chromedp/chromedp"
+	"github.com/koizuka/scraper"
 	"os"
 	"testing"
 	"time"
@@ -34,21 +35,21 @@ func getCICompatibleChromeOptions() []chromedp.ExecAllocatorOption {
 	return options
 }
 
-// NewTestChromeOptions creates Chrome options with CI compatibility built-in.
+// NewTestOptions creates Chrome options with CI compatibility built-in.
 // This helper function simplifies test code by automatically including
 // CI-compatible options when needed.
-func NewTestChromeOptions(headless bool) NewChromeOptions {
-	return NewChromeOptions{
+func NewTestOptions(headless bool) Options {
+	return Options{
 		Headless:          headless,
 		ExtraAllocOptions: getCICompatibleChromeOptions(),
 	}
 }
 
-// NewTestChromeOptionsWithTimeout creates Chrome options with CI compatibility and custom timeout.
+// NewTestOptionsWithTimeout creates Chrome options with CI compatibility and custom timeout.
 // This helper function simplifies test code by automatically including
 // CI-compatible options when needed, with a custom timeout setting.
-func NewTestChromeOptionsWithTimeout(headless bool, timeout time.Duration) NewChromeOptions {
-	return NewChromeOptions{
+func NewTestOptionsWithTimeout(headless bool, timeout time.Duration) Options {
+	return Options{
 		Headless:          headless,
 		Timeout:           getCIMinTimeout(timeout),
 		ExtraAllocOptions: getCICompatibleChromeOptions(),
@@ -70,7 +71,7 @@ func getCIMinTimeout(requested time.Duration) time.Duration {
 	return requested
 }
 
-// NewTestChromeContext creates an isolated Chrome browser context for tests.
+// NewTestContext creates an isolated Chrome browser context for tests.
 // It uses a per-test temporary user data directory to avoid conflicts with
 // other Chrome instances, and applies CI-aware timeouts.
 // Retries up to 2 times on Chrome startup failure (flaky CI environments).
@@ -80,12 +81,12 @@ func getCIMinTimeout(requested time.Duration) time.Duration {
 // the test when files are still locked, and on Windows Chrome's crashpad
 // handler (a separate process the allocator does not wait for) can briefly
 // keep files open after the browser exits. Cleanup is best-effort instead.
-func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
+func NewTestContext(t *testing.T, timeout time.Duration) context.Context {
 	t.Helper()
 
 	const maxRetries = 2
 
-	testOptions := NewTestChromeOptions(true)
+	testOptions := NewTestOptions(true)
 	effectiveTimeout := getCIMinTimeout(timeout)
 	if effectiveTimeout == 0 {
 		effectiveTimeout = 30 * time.Second
@@ -137,16 +138,16 @@ func NewTestChromeContext(t *testing.T, timeout time.Duration) context.Context {
 	return ctx
 }
 
-// NewChromeWithRetry creates a new Chrome session with retry logic for startup failures.
+// NewWithRetry creates a new Chrome session with retry logic for startup failures.
 // This helper is specifically designed to handle flaky Chrome startup issues in CI environments.
 // It retries on any Chrome startup failure (crashes, sandbox issues, websocket timeouts, etc.).
-func NewChromeWithRetry(session *Session, options NewChromeOptions, maxRetries int) (*ChromeSession, func(), error) {
-	var chromeSession *ChromeSession
+func NewWithRetry(session *scraper.Session, options Options, maxRetries int) (*Session, func(), error) {
+	var chromeSession *Session
 	var cancelFunc func()
 	var err error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		chromeSession, cancelFunc, err = session.NewChromeOpt(options)
+		chromeSession, cancelFunc, err = New(session, options)
 		if err == nil {
 			return chromeSession, cancelFunc, nil
 		}

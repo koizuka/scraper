@@ -1,4 +1,4 @@
-package scraper
+package chrome
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/chromedp/chromedp"
 	"github.com/google/go-cmp/cmp"
+	"github.com/koizuka/scraper"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,14 +37,14 @@ func TestSession_RunNavigate(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Errorf("NewChromeOpt() error: %v", err)
+			t.Errorf("New() error: %v", err)
 			return
 		}
 
@@ -52,7 +53,7 @@ func TestSession_RunNavigate(t *testing.T) {
 			return
 		}
 
-		filename := session.getHtmlFilename()
+		filename := session.HtmlFilename()
 		rawHtml, err := os.ReadFile(filename)
 		if err != nil {
 			t.Error(err)
@@ -85,14 +86,14 @@ func TestSession_RunNavigate(t *testing.T) {
 			t.Error(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 10*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 10*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Errorf("NewChromeOpt() error: %v", err)
+			t.Errorf("New() error: %v", err)
 			return
 		}
 
@@ -137,8 +138,8 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 		t.Error(err)
 	}
 
-	logger := BufferedLogger{}
-	session := NewSession(sessionName, &logger)
+	logger := scraper.BufferedLogger{}
+	session := scraper.NewSession(sessionName, &logger)
 
 	tests := []struct {
 		name    string
@@ -169,10 +170,10 @@ func TestChromeSession_DownloadFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+			chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 			defer cancelFunc()
 			if err != nil {
-				t.Errorf("NewChromeOpt() error: %v", err)
+				t.Errorf("New() error: %v", err)
 				return
 			}
 
@@ -227,14 +228,14 @@ func TestChromeSession_DebugStep(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		logger := &BufferedLogger{}
-		session := NewSession(sessionName, logger)
+		logger := &scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Test with debug step
@@ -246,14 +247,14 @@ func TestChromeSession_DebugStep(t *testing.T) {
 			t.Fatalf("RunNavigate() error: %v", err)
 		}
 
-		logOutput := logger.buffer.String()
+		logOutput := logger.String()
 		expectedLog := fmt.Sprintf("**** [%s] SAVE to", debugStep)
 		if !strings.Contains(logOutput, expectedLog) {
 			t.Errorf("Expected debug step in Chrome SAVE log %q, got: %s", expectedLog, logOutput)
 		}
 	})
 
-	t.Run("debug step inheritance from Session", func(t *testing.T) {
+	t.Run("debug step inheritance from scraper.Session", func(t *testing.T) {
 		// Create temp directory
 		dir, err := os.MkdirTemp(".", "chrome_debug_inherit_test*")
 		if err != nil {
@@ -267,29 +268,29 @@ func TestChromeSession_DebugStep(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		logger := &BufferedLogger{}
-		session := NewSession(sessionName, logger)
+		logger := &scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, logger)
 		session.FilePrefix = dir + "/"
 
 		// Set debug step on Session
 		debugStep := "継承テスト"
 		session.SetDebugStep(debugStep)
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
-		// Verify ChromeSession inherits the debug step from Session
-		if chromeSession.debugStep != debugStep {
-			t.Errorf("Expected ChromeSession to inherit debug step %q, got %q", debugStep, chromeSession.debugStep)
+		// Verify chrome Session inherits the debug step from scraper.Session
+		if chromeSession.GetDebugStep() != debugStep {
+			t.Errorf("Expected Session to inherit debug step %q, got %q", debugStep, chromeSession.GetDebugStep())
 		}
 
-		// Test clearing debug step from ChromeSession affects the embedded Session
+		// Test clearing debug step from chrome Session affects the embedded scraper.Session
 		chromeSession.ClearDebugStep()
-		if session.debugStep != "" {
-			t.Errorf("Expected Session debug step to be cleared via ChromeSession, got %q", session.debugStep)
+		if session.GetDebugStep() != "" {
+			t.Errorf("Expected scraper.Session debug step to be cleared via chrome Session, got %q", session.GetDebugStep())
 		}
 	})
 }
@@ -325,16 +326,16 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logger := &BufferedLogger{}
-	session := NewSession(sessionName, logger)
+	logger := &scraper.BufferedLogger{}
+	session := scraper.NewSession(sessionName, logger)
 	session.FilePrefix = dir + "/"
 
 	t.Run("record mode", func(t *testing.T) {
 		// First, record the session
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Record a series of actions
@@ -375,16 +376,16 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 
 	t.Run("replay mode", func(t *testing.T) {
 		// Reset logger and invoke count for replay test
-		logger.buffer.Reset()
-		session.invokeCount = 0
+		logger.Reset()
+		session.InvokeCount = 0
 
 		// Enable replay mode
 		session.NotUseNetwork = true
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Replay the same series of actions
@@ -414,7 +415,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		}
 
 		var data PageData
-		err = chromeSession.ExtractData(&data, "body", UnmarshalOption{})
+		err = chromeSession.ExtractData(&data, "body", scraper.UnmarshalOption{})
 		if err != nil {
 			t.Errorf("ExtractData() in replay mode error: %v", err)
 		}
@@ -426,7 +427,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		}
 
 		// Verify that replay logs were generated
-		logOutput := logger.buffer.String()
+		logOutput := logger.String()
 		if !strings.Contains(logOutput, "REPLAY LOADED") {
 			t.Errorf("Expected replay logs, got: %s", logOutput)
 		}
@@ -434,13 +435,13 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 
 	t.Run("replay mode - file not found", func(t *testing.T) {
 		// Reset for clean test
-		session.invokeCount = 0
+		session.InvokeCount = 0
 		session.NotUseNetwork = true
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Remove one of the saved files to test error handling
@@ -452,7 +453,7 @@ func TestChromeSession_ReplayMode(t *testing.T) {
 		}
 
 		// Check that it returns RetryAndRecordError
-		if _, ok := err.(RetryAndRecordError); !ok {
+		if _, ok := err.(scraper.RetryAndRecordError); !ok {
 			t.Errorf("Expected RetryAndRecordError, got %T: %v", err, err)
 		}
 	})
@@ -478,14 +479,14 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		defer cancelFunc()
 		if err != nil {
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		// Navigate to page
@@ -539,10 +540,10 @@ func TestChromeSession_SaveLastHtmlSnapshot(t *testing.T) {
 	})
 
 	t.Run("handles empty lastHtml gracefully", func(t *testing.T) {
-		logger := BufferedLogger{}
-		session := NewSession("test", &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession("test", &logger)
 
-		chromeSession := &ChromeSession{
+		chromeSession := &Session{
 			Session:  session,
 			lastHtml: "", // Empty
 		}
@@ -578,14 +579,14 @@ func runPollingDownloadTest(t *testing.T, url string, sessionName string, placeF
 			t.Fatal(err)
 		}
 
-		logger := BufferedLogger{}
-		session := NewSession(sessionName, &logger)
+		logger := scraper.BufferedLogger{}
+		session := scraper.NewSession(sessionName, &logger)
 		session.FilePrefix = dir + "/"
 
-		chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 30*time.Second), 2)
+		chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 30*time.Second), 2)
 		if err != nil {
 			cancelFunc()
-			t.Fatalf("NewChromeOpt() error: %v", err)
+			t.Fatalf("New() error: %v", err)
 		}
 
 		go placeFiles(chromeSession.DownloadPath)
@@ -710,14 +711,14 @@ func TestChromeSession_BrowserCtxSurvivesTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logger := BufferedLogger{}
-	session := NewSession(sessionName, &logger)
+	logger := scraper.BufferedLogger{}
+	session := scraper.NewSession(sessionName, &logger)
 	session.FilePrefix = dir + "/"
 
-	chromeSession, cancelFunc, err := NewChromeWithRetry(session, newIsolatedTestChromeOptions(t, true, 3*time.Second), 2)
+	chromeSession, cancelFunc, err := NewWithRetry(session, newIsolatedTestOptions(t, true, 3*time.Second), 2)
 	defer cancelFunc()
 	if err != nil {
-		t.Fatalf("NewChromeOpt() error: %v", err)
+		t.Fatalf("New() error: %v", err)
 	}
 
 	if err := chromedp.Do(chromeSession.Ctx, chromedp.Navigate(ts.URL)); err != nil {

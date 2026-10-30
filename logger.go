@@ -28,3 +28,8 @@ func (buflog *BufferedLogger) Flush(logger Logger) {
 		logger.Printf("%v", s)
 	}
 }
+
+// Reset discards the buffered log contents.
+func (buflog *BufferedLogger) Reset() {
+	buflog.buffer.Reset()
+}

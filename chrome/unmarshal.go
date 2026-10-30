@@ -1,4 +1,4 @@
-package scraper
+package chrome
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
+	"github.com/koizuka/scraper"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -85,7 +86,7 @@ func hasFirstLastChildSelectors(cssSelector string) bool {
 	return false
 }
 
-func fillValue(ctx context.Context, cssSelector string, value reflect.Value, selected []string, opt UnmarshalOption) error {
+func fillValue(ctx context.Context, cssSelector string, value reflect.Value, selected []string, opt scraper.UnmarshalOption) error {
 	// texts
 	if value.Kind() == reflect.Slice {
 		// Error if nth-child related selectors are present
@@ -151,7 +152,7 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 		}
 
 		// Call custom Unmarshal method if the type implements Unmarshaller interface
-		if inf, ok := value.Addr().Interface().(Unmarshaller); ok {
+		if inf, ok := value.Addr().Interface().(scraper.Unmarshaller); ok {
 			return inf.Unmarshal(s)
 		}
 
@@ -171,7 +172,7 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 			var i int64
 			_, err := fmt.Sscanf(stripComma(strings.TrimSpace(s)), "%d", &i)
 			if err != nil {
-				return UnmarshalParseNumberError{err, s}
+				return scraper.UnmarshalParseNumberError{Err: err, Got: s}
 			}
 			value.SetInt(i)
 
@@ -183,12 +184,12 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 			var i uint64
 			_, err := fmt.Sscanf(stripComma(strings.TrimSpace(s)), "%d", &i)
 			if err != nil {
-				return UnmarshalParseNumberError{err, s}
+				return scraper.UnmarshalParseNumberError{Err: err, Got: s}
 			}
 			value.SetUint(i)
 
 		case float32, float64:
-			f, err := ExtractNumber(s)
+			f, err := scraper.ExtractNumber(s)
 			if err != nil {
 				return err
 			}
@@ -202,7 +203,7 @@ func fillValue(ctx context.Context, cssSelector string, value reflect.Value, sel
 	return nil
 }
 
-func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector string, opt UnmarshalOption) error {
+func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector string, opt scraper.UnmarshalOption) error {
 	if opt.Re != "" {
 		return fmt.Errorf("`re` tag must be empty for struct")
 	}
@@ -310,9 +311,9 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 		}
 
 		if fieldType.PkgPath != "" {
-			return UnmarshalFieldError{
-				fieldType.Name,
-				UnmarshalUnexportedFieldError{},
+			return scraper.UnmarshalFieldError{
+				Field: fieldType.Name,
+				Err:   scraper.UnmarshalUnexportedFieldError{},
 			}
 		}
 
@@ -323,9 +324,9 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 
 		err := fillValue(ctx, fmt.Sprintf("%v %v", cssSelector, optFind), fieldValue, selected, opt)
 		if err != nil {
-			return UnmarshalFieldError{
-				fieldType.Name,
-				err,
+			return scraper.UnmarshalFieldError{
+				Field: fieldType.Name,
+				Err:   err,
 			}
 		}
 	}
@@ -333,14 +334,14 @@ func chromeUnmarshalStruct(ctx context.Context, value reflect.Value, cssSelector
 	return nil
 }
 
-func ChromeUnmarshal(ctx context.Context, v interface{}, cssSelector string, opt UnmarshalOption) error {
+func Unmarshal(ctx context.Context, v interface{}, cssSelector string, opt scraper.UnmarshalOption) error {
 	if opt.Loc == nil {
 		opt.Loc = time.UTC
 	}
 
 	ht := reflect.TypeOf(v)
 	if ht.Kind() != reflect.Ptr {
-		return UnmarshalMustBePointerError{}
+		return scraper.UnmarshalMustBePointerError{}
 	}
 
 	// struct専用

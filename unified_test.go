@@ -323,8 +323,22 @@ func TestScraperTypeDetection(t *testing.T) {
 		t.Errorf("GetScraperType(session) = %v, want %v", scraperType, HTTPScraper)
 	}
 
-	// Test Chrome scraper type detection would require Chrome setup
-	// This is left as a placeholder for when Chrome tests are enabled
+	// Scrapers that implement ScraperTyper report their own type
+	// (Chrome detection itself is tested in the chrome module)
+	typed := typedScraper{Session: session, scraperType: ChromeScraper}
+	if got := GetScraperType(typed); got != ChromeScraper {
+		t.Errorf("GetScraperType(typed) = %v, want %v", got, ChromeScraper)
+	}
+}
+
+// typedScraper is a UnifiedScraper that reports a fixed ScraperType
+type typedScraper struct {
+	*Session
+	scraperType ScraperType
+}
+
+func (s typedScraper) ScraperType() ScraperType {
+	return s.scraperType
 }
 
 // Helper function for formatting in concurrent tests

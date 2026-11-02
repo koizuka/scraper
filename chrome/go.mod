@@ -3,7 +3,7 @@ module github.com/koizuka/scraper/chrome
 go 1.27
 
 require (
-	github.com/chromedp/cdproto v0.158.4
+	github.com/chromedp/cdproto v0.158.5
 	github.com/chromedp/chromedp v0.21.0
 	github.com/google/go-cmp v0.7.0
 	github.com/koizuka/scraper v0.0.64

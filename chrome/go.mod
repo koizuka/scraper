@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/chromedp/cdproto v0.159.1
-	github.com/chromedp/chromedp v0.22.0
+	github.com/chromedp/chromedp v0.22.1
 	github.com/google/go-cmp v0.7.0
 	github.com/koizuka/scraper v0.0.64
 )

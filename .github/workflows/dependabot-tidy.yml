@@ -1,0 +1,58 @@
+name: Dependabot go mod tidy
+
+# The chrome module replaces github.com/koizuka/scraper with ../, so a
+# Dependabot update to the root go.mod also requires chrome/go.mod and
+# chrome/go.sum to be tidied (and vice versa). Dependabot only touches the
+# directory it updates, so tidy every module here and push the result.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/go.mod'
+      - '**/go.sum'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tidy:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7.0.1
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v7.0.0
+      with:
+        go-version: "1.27"
+
+    - name: go mod tidy
+      run: |
+        go mod tidy
+        (cd chrome && go mod tidy)
+
+    - name: Commit and push
+      id: push
+      run: |
+        if git diff --quiet; then
+          echo "No changes"
+          echo "pushed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -am "chore: go mod tidy"
+        git push
+        echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+    # Pushes made with GITHUB_TOKEN do not trigger workflows, so start the
+    # Go CI explicitly for the new head commit.
+    - name: Run Go CI on the new commit
+      if: steps.push.outputs.pushed == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh workflow run go.yml --ref "${{ github.event.pull_request.head.ref }}"

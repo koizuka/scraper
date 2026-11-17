@@ -7,7 +7,7 @@ require (
 	github.com/dimchansky/utfbom v1.2.0
 	github.com/google/go-cmp v0.7.0
 	github.com/orirawlings/persistent-cookiejar v0.3.2
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 )
 
 require (
